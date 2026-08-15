@@ -1,0 +1,1 @@
+"""Machine-validatable program configuration."""

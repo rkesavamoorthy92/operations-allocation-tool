@@ -13,3 +13,6 @@ output/*
 dist/
 build/
 *.spec
+.vscode/
+
+*.egg-info/
