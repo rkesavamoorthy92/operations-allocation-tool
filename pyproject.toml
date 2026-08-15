@@ -1,0 +1,9 @@
+[project]
+name = "operations-allocation-tool"
+version = "0.1.0"
+description = "Offline Operations Allocation and Quality Management Tool"
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
