@@ -137,7 +137,7 @@ class FoundationTestCase(unittest.TestCase):
     def test_snapshot_is_immutable_and_retains_original_configuration(self) -> None:
         run = self.service.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
         configuration = valid_config()
-        snapshot = self.service.freeze_setup(run_id=run.run_id, program_configuration=configuration, sampling={"method": "percentage", "value": "3"}, random_seed="42", associates=[{"associate_id": "A001", "active": True, "target": 5, "maximum_capacity": 10, "experience": "new"}])
+        snapshot = self.service.freeze_setup(run_id=run.run_id, program_configuration=configuration, sampling={"method": "percentage", "value": "3"}, random_seed="42", associates=[{"associate_id": "A001", "name": "Alice", "active": True, "target": 5, "maximum_capacity": 10, "experience": "new"}])
         configuration["fields"][0]["source_column"] = "Changed"
         frozen = self.snapshots.get(run.run_id)
         self.assertEqual(snapshot.sha256, frozen.sha256)
@@ -247,7 +247,17 @@ class FoundationTestCase(unittest.TestCase):
         AssociateRepository(self.programs.database).add(Associate("A001", "Associate", "a@example.test", False, default_target=5, default_maximum_capacity=8))
         run = self.service.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
         with self.assertRaises(InvalidAssociateConfigurationError):
-                self.service.freeze_setup(run_id=run.run_id, program_configuration=valid_config(), sampling={}, random_seed=None, associates=[{"associate_id": "A001", "active": False, "target": 8, "maximum_capacity": 4}])
+                self.service.freeze_setup(run_id=run.run_id, program_configuration=valid_config(), sampling={}, random_seed=None, associates=[{"associate_id": "A001", "name": "Alice", "active": False, "target": 8, "maximum_capacity": 4}])
+
+    def test_snapshot_associates_require_a_name(self) -> None:
+        """Regression test: Associate File Splitting (PROJECT_SPEC.md
+        section 15) needs each associate's display name for the filename
+        convention and metadata sheet, so a snapshot associate with no
+        'name' must be rejected at setup time rather than surfacing as a
+        confusing failure much later during Distribution."""
+        run = self.service.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
+        with self.assertRaises(InvalidAssociateConfigurationError):
+            self.service.freeze_setup(run_id=run.run_id, program_configuration=valid_config(), sampling={}, random_seed=None, associates=[{"associate_id": "A001", "active": True, "target": 5, "maximum_capacity": 5}])
 
     def test_associate_master_validation_and_immutable_objects(self) -> None:
         with self.assertRaises(InvalidAssociateConfigurationError): Associate("", "Name", "", True)

@@ -57,6 +57,9 @@ def _validate_snapshot_associates(associates: list[dict[str, Any]]) -> None:
         if not isinstance(identifier, str) or not identifier.strip() or identifier in ids:
             raise InvalidAssociateConfigurationError("Snapshot associates require unique non-empty associate IDs.")
         ids.add(identifier)
+        name = associate.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise InvalidAssociateConfigurationError(f"Associate '{identifier}' requires a non-empty name.")
         for field in ("target", "maximum_capacity"):
             value = associate.get(field)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
