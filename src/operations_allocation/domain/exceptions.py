@@ -118,3 +118,9 @@ class ConsolidationBlockedByExceptionsError(OperationsAllocationError):
 class InvalidOverrideError(OperationsAllocationError):
     """Raised when a Consolidation exception override is missing required
     accountability fields (user, reason)."""
+
+
+class InvalidQcResultError(OperationsAllocationError):
+    """Raised when an imported QC report row has an unrecognized audit
+    outcome value or references an identifier outside the Run's
+    consolidated items."""
