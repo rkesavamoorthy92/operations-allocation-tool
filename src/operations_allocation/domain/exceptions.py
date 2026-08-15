@@ -51,3 +51,7 @@ class InvalidResolutionError(OperationsAllocationError):
 
 class UnresolvedDuplicatesError(OperationsAllocationError):
     """Raised when the eligible population is frozen with unresolved duplicate IDs."""
+
+
+class SamplingConfigurationError(OperationsAllocationError):
+    """Raised when sampling configuration or inputs are invalid for the Randomizer."""

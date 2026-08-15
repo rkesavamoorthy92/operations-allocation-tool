@@ -15,7 +15,7 @@ from pathlib import Path
 
 from operations_allocation.domain.exceptions import PersistenceError
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class Database:
@@ -157,6 +157,21 @@ class Database:
             excluded_row_count INTEGER NOT NULL CHECK (excluded_row_count >= 0),
             resolutions_json TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS sampling_results (
+            run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+            sampling_method TEXT NOT NULL,
+            requested_value TEXT NOT NULL,
+            eligible_population_count INTEGER NOT NULL CHECK (eligible_population_count >= 0),
+            calculated_sample_count TEXT,
+            actual_sample_count INTEGER NOT NULL CHECK (actual_sample_count >= 0),
+            random_seed TEXT NOT NULL,
+            rng_algorithm TEXT NOT NULL,
+            rng_algorithm_version TEXT NOT NULL,
+            sampling_algorithm TEXT NOT NULL,
+            sampling_algorithm_version TEXT NOT NULL,
+            selected_identifiers_json TEXT NOT NULL,
+            sampled_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS schema_metadata (
             schema_name TEXT PRIMARY KEY,
             schema_version INTEGER NOT NULL CHECK (schema_version >= 1)
@@ -179,6 +194,12 @@ class Database:
         CREATE TRIGGER IF NOT EXISTS prevent_eligible_population_delete
         BEFORE DELETE ON eligible_populations
         BEGIN SELECT RAISE(ABORT, 'Eligible populations are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS prevent_sampling_result_update
+        BEFORE UPDATE ON sampling_results
+        BEGIN SELECT RAISE(ABORT, 'Sampling results are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS prevent_sampling_result_delete
+        BEFORE DELETE ON sampling_results
+        BEGIN SELECT RAISE(ABORT, 'Sampling results are append-only'); END;
         """
         try:
             with self.transaction() as connection:

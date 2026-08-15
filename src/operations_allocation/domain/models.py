@@ -157,3 +157,23 @@ class EligiblePopulation:
     total_rows: int
     excluded_row_count: int
     resolutions: tuple[DuplicateResolution, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SamplingResult:
+    """The immutable outcome of random sampling for a Run (PROJECT_SPEC.md
+    section 9-10 / ARCHITECTURE.md section 7.1, SamplingResult)."""
+
+    run_id: str
+    sampling_method: str
+    requested_value: str
+    eligible_population_count: int
+    calculated_sample_count: str | None
+    actual_sample_count: int
+    random_seed: str
+    rng_algorithm: str
+    rng_algorithm_version: str
+    sampling_algorithm: str
+    sampling_algorithm_version: str
+    selected_identifiers: tuple[str, ...]
+    sampled_at: datetime

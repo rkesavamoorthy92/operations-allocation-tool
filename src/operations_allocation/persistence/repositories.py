@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from operations_allocation.domain.exceptions import DuplicateRunIdError, InvalidRunStateError, ManifestIntegrityError, PersistenceError
-from operations_allocation.domain.models import Associate, DuplicateResolution, EligiblePopulation, ExecutionManifest, Program, Run, RunConfigurationSnapshot, RunState
+from operations_allocation.domain.models import Associate, DuplicateResolution, EligiblePopulation, ExecutionManifest, Program, Run, RunConfigurationSnapshot, RunState, SamplingResult
 from operations_allocation.domain.state_machine import ensure_transition
 from operations_allocation.utils.canonical import deep_thaw
 
@@ -282,6 +282,53 @@ class EligiblePopulationRepository:
                 total_rows=row["total_rows"],
                 excluded_row_count=row["excluded_row_count"],
                 resolutions=resolutions,
+            )
+
+
+class SamplingResultRepository:
+    def __init__(self, database: Any) -> None:
+        self.database = database
+
+    def add(self, result: SamplingResult, connection: sqlite3.Connection | None = None) -> None:
+        with _write_scope(self.database, connection) as conn:
+            conn.execute(
+                "INSERT INTO sampling_results (run_id, sampling_method, requested_value, eligible_population_count, calculated_sample_count, actual_sample_count, random_seed, rng_algorithm, rng_algorithm_version, sampling_algorithm, sampling_algorithm_version, selected_identifiers_json, sampled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    result.run_id,
+                    result.sampling_method,
+                    result.requested_value,
+                    result.eligible_population_count,
+                    result.calculated_sample_count,
+                    result.actual_sample_count,
+                    result.random_seed,
+                    result.rng_algorithm,
+                    result.rng_algorithm_version,
+                    result.sampling_algorithm,
+                    result.sampling_algorithm_version,
+                    json.dumps(list(result.selected_identifiers), separators=(",", ":")),
+                    result.sampled_at.isoformat(),
+                ),
+            )
+
+    def get(self, run_id: str) -> SamplingResult:
+        with _read_scope(self.database) as conn:
+            row = conn.execute("SELECT * FROM sampling_results WHERE run_id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise PersistenceError(f"Run '{run_id}' does not have a sampling result.")
+            return SamplingResult(
+                run_id=row["run_id"],
+                sampling_method=row["sampling_method"],
+                requested_value=row["requested_value"],
+                eligible_population_count=row["eligible_population_count"],
+                calculated_sample_count=row["calculated_sample_count"],
+                actual_sample_count=row["actual_sample_count"],
+                random_seed=row["random_seed"],
+                rng_algorithm=row["rng_algorithm"],
+                rng_algorithm_version=row["rng_algorithm_version"],
+                sampling_algorithm=row["sampling_algorithm"],
+                sampling_algorithm_version=row["sampling_algorithm_version"],
+                selected_identifiers=tuple(json.loads(row["selected_identifiers_json"])),
+                sampled_at=datetime.fromisoformat(row["sampled_at"]),
             )
 
 
