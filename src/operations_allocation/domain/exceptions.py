@@ -35,3 +35,19 @@ class InvalidRunStateError(OperationsAllocationError):
 
 class PersistenceError(OperationsAllocationError):
     """Raised when local persistence cannot complete safely."""
+
+
+class IdentifierNormalizationError(OperationsAllocationError):
+    """Raised when a primary identifier value cannot be normalized."""
+
+
+class ValidationBlockedError(OperationsAllocationError):
+    """Raised when structural Critical validation issues prevent processing."""
+
+
+class InvalidResolutionError(OperationsAllocationError):
+    """Raised when a duplicate-identifier resolution record is malformed."""
+
+
+class UnresolvedDuplicatesError(OperationsAllocationError):
+    """Raised when the eligible population is frozen with unresolved duplicate IDs."""

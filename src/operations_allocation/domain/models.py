@@ -8,7 +8,7 @@ from enum import StrEnum
 import re
 from typing import Any, Mapping
 
-from operations_allocation.domain.exceptions import InvalidAssociateConfigurationError
+from operations_allocation.domain.exceptions import InvalidAssociateConfigurationError, InvalidResolutionError
 from operations_allocation.utils.canonical import deep_freeze
 
 
@@ -107,3 +107,53 @@ class ExecutionManifest:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "output_artifact_hashes", deep_freeze(self.output_artifact_hashes or {}))
+
+
+_RESOLUTION_ACTIONS = {"EXCLUDE_ALL", "KEEP_ROW"}
+
+
+@dataclass(frozen=True, slots=True)
+class DuplicateResolution:
+    """A manual resolution for one duplicate-identifier group (PROJECT_SPEC.md
+    section 8, Duplicate Product IDs).
+
+    ``action`` is either ``EXCLUDE_ALL`` (every row sharing the normalized
+    identifier is excluded from the eligible population) or ``KEEP_ROW``
+    (exactly one row, identified by ``kept_row_index``, is retained and the
+    rest are excluded). The system never infers this choice automatically.
+    """
+
+    normalized_identifier: str
+    original_values: tuple[str, ...]
+    row_indexes: tuple[int, ...]
+    action: str
+    resolved_by: str
+    resolved_at: datetime
+    reason: str
+    kept_row_index: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.normalized_identifier.strip():
+            raise InvalidResolutionError("Duplicate resolution requires a normalized identifier.")
+        if self.action not in _RESOLUTION_ACTIONS:
+            raise InvalidResolutionError(f"Duplicate resolution action must be one of {sorted(_RESOLUTION_ACTIONS)}.")
+        if self.action == "KEEP_ROW" and self.kept_row_index not in self.row_indexes:
+            raise InvalidResolutionError("KEEP_ROW resolutions must name a row index within the duplicate group.")
+        if not self.reason.strip():
+            raise InvalidResolutionError("Duplicate resolution requires a reason.")
+        if not self.resolved_by.strip():
+            raise InvalidResolutionError("Duplicate resolution requires the resolving user.")
+
+
+@dataclass(frozen=True, slots=True)
+class EligiblePopulation:
+    """The frozen, immutable set of items eligible for sampling for a Run
+    (PROJECT_SPEC.md section 8 / ARCHITECTURE.md section 7.1)."""
+
+    run_id: str
+    member_identifiers: tuple[str, ...]
+    fingerprint: str
+    frozen_at: datetime
+    total_rows: int
+    excluded_row_count: int
+    resolutions: tuple[DuplicateResolution, ...] = ()

@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from operations_allocation.domain.exceptions import DuplicateRunIdError, InvalidRunStateError, ManifestIntegrityError, PersistenceError
-from operations_allocation.domain.models import Associate, ExecutionManifest, Program, Run, RunConfigurationSnapshot, RunState
+from operations_allocation.domain.models import Associate, DuplicateResolution, EligiblePopulation, ExecutionManifest, Program, Run, RunConfigurationSnapshot, RunState
 from operations_allocation.domain.state_machine import ensure_transition
 from operations_allocation.utils.canonical import deep_thaw
 
@@ -222,6 +222,67 @@ class ManifestRepository:
 
 def _snapshot(row: sqlite3.Row) -> RunConfigurationSnapshot:
     return RunConfigurationSnapshot(row["snapshot_id"], row["run_id"], row["program_configuration_version"], row["canonical_version"], row["canonical_json"], row["sha256"], datetime.fromisoformat(row["created_at"]))
+
+
+class EligiblePopulationRepository:
+    def __init__(self, database: Any) -> None:
+        self.database = database
+
+    def add(self, population: EligiblePopulation, connection: sqlite3.Connection | None = None) -> None:
+        resolutions_payload = [
+            {
+                "normalized_identifier": resolution.normalized_identifier,
+                "original_values": list(resolution.original_values),
+                "row_indexes": list(resolution.row_indexes),
+                "action": resolution.action,
+                "resolved_by": resolution.resolved_by,
+                "resolved_at": resolution.resolved_at.isoformat(),
+                "reason": resolution.reason,
+                "kept_row_index": resolution.kept_row_index,
+            }
+            for resolution in population.resolutions
+        ]
+        with _write_scope(self.database, connection) as conn:
+            conn.execute(
+                "INSERT INTO eligible_populations (run_id, member_identifiers_json, fingerprint, frozen_at, total_rows, excluded_row_count, resolutions_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    population.run_id,
+                    json.dumps(list(population.member_identifiers), sort_keys=False, separators=(",", ":")),
+                    population.fingerprint,
+                    population.frozen_at.isoformat(),
+                    population.total_rows,
+                    population.excluded_row_count,
+                    json.dumps(resolutions_payload, sort_keys=True, separators=(",", ":")),
+                ),
+            )
+
+    def get(self, run_id: str) -> EligiblePopulation:
+        with _read_scope(self.database) as conn:
+            row = conn.execute("SELECT * FROM eligible_populations WHERE run_id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise PersistenceError(f"Run '{run_id}' does not have a frozen eligible population.")
+            resolutions = tuple(
+                DuplicateResolution(
+                    normalized_identifier=item["normalized_identifier"],
+                    original_values=tuple(item["original_values"]),
+                    row_indexes=tuple(item["row_indexes"]),
+                    action=item["action"],
+                    resolved_by=item["resolved_by"],
+                    resolved_at=datetime.fromisoformat(item["resolved_at"]),
+                    reason=item["reason"],
+                    kept_row_index=item["kept_row_index"],
+                )
+                for item in json.loads(row["resolutions_json"])
+            )
+            return EligiblePopulation(
+                run_id=row["run_id"],
+                member_identifiers=tuple(json.loads(row["member_identifiers_json"])),
+                fingerprint=row["fingerprint"],
+                frozen_at=datetime.fromisoformat(row["frozen_at"]),
+                total_rows=row["total_rows"],
+                excluded_row_count=row["excluded_row_count"],
+                resolutions=resolutions,
+            )
 
 
 def _run_date_and_sequence(run_id: str) -> tuple[str, int]:
