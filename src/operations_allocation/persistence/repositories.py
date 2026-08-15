@@ -70,6 +70,11 @@ class ProgramRepository:
                 raise PersistenceError(f"Program '{program_id}' could not be found.")
             return Program(row["program_id"], row["name"], row["active_configuration_version"], bool(row["active"]))
 
+    def list_all(self) -> tuple[Program, ...]:
+        with _read_scope(self.database) as conn:
+            rows = conn.execute("SELECT * FROM programs ORDER BY program_id").fetchall()
+            return tuple(Program(row["program_id"], row["name"], row["active_configuration_version"], bool(row["active"])) for row in rows)
+
 
 class AssociateRepository:
     def __init__(self, database: Any) -> None:
@@ -128,6 +133,14 @@ class RunRepository:
             if row is None:
                 raise PersistenceError(f"Run '{run_id}' could not be found.")
             return Run(row["run_id"], row["program_id"], row["created_by"], datetime.fromisoformat(row["created_at"]), RunState(row["state"]), date.fromisoformat(row["due_date"]) if row["due_date"] else None, row["snapshot_id"])
+
+    def list_all(self) -> tuple[Run, ...]:
+        with _read_scope(self.database) as conn:
+            rows = conn.execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
+            return tuple(
+                Run(row["run_id"], row["program_id"], row["created_by"], datetime.fromisoformat(row["created_at"]), RunState(row["state"]), date.fromisoformat(row["due_date"]) if row["due_date"] else None, row["snapshot_id"])
+                for row in rows
+            )
 
     def update_state(self, run_id: str, state: RunState, connection: sqlite3.Connection | None = None) -> None:
         with _write_scope(self.database, connection) as conn:
