@@ -15,7 +15,7 @@ from pathlib import Path
 
 from operations_allocation.domain.exceptions import PersistenceError
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class Database:
@@ -172,6 +172,19 @@ class Database:
             selected_identifiers_json TEXT NOT NULL,
             sampled_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS allocation_results (
+            run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+            sample_count INTEGER NOT NULL CHECK (sample_count >= 0),
+            total_target INTEGER NOT NULL CHECK (total_target >= 0),
+            total_maximum_capacity INTEGER NOT NULL CHECK (total_maximum_capacity >= 0),
+            capacity_shortage INTEGER NOT NULL CHECK (capacity_shortage >= 0),
+            unused_capacity INTEGER NOT NULL CHECK (unused_capacity >= 0),
+            required_above_target_confirmation INTEGER NOT NULL CHECK (required_above_target_confirmation IN (0, 1)),
+            confirmed_above_target INTEGER NOT NULL CHECK (confirmed_above_target IN (0, 1)),
+            confirmed_by TEXT,
+            assignments_json TEXT NOT NULL,
+            allocated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS schema_metadata (
             schema_name TEXT PRIMARY KEY,
             schema_version INTEGER NOT NULL CHECK (schema_version >= 1)
@@ -200,6 +213,12 @@ class Database:
         CREATE TRIGGER IF NOT EXISTS prevent_sampling_result_delete
         BEFORE DELETE ON sampling_results
         BEGIN SELECT RAISE(ABORT, 'Sampling results are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS prevent_allocation_result_update
+        BEFORE UPDATE ON allocation_results
+        BEGIN SELECT RAISE(ABORT, 'Allocation results are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS prevent_allocation_result_delete
+        BEFORE DELETE ON allocation_results
+        BEGIN SELECT RAISE(ABORT, 'Allocation results are append-only'); END;
         """
         try:
             with self.transaction() as connection:

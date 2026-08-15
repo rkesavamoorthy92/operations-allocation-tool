@@ -55,3 +55,11 @@ class UnresolvedDuplicatesError(OperationsAllocationError):
 
 class SamplingConfigurationError(OperationsAllocationError):
     """Raised when sampling configuration or inputs are invalid for the Randomizer."""
+
+
+class InsufficientCapacityError(OperationsAllocationError):
+    """Raised when total active-associate maximum capacity is below the sample count."""
+
+
+class AboveTargetConfirmationRequiredError(OperationsAllocationError):
+    """Raised when finalizing allocation above target without explicit confirmation."""

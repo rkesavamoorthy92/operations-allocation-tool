@@ -177,3 +177,44 @@ class SamplingResult:
     sampling_algorithm_version: str
     selected_identifiers: tuple[str, ...]
     sampled_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AllocationAssignment:
+    """One associate's finalized share of a Run's sample
+    (PROJECT_SPEC.md section 11 / ARCHITECTURE.md section 7.1,
+    AllocationPlan / AllocationResult)."""
+
+    associate_id: str
+    target: int
+    maximum_capacity: int
+    planned_count: int
+    assigned_identifiers: tuple[str, ...]
+    above_target: bool
+
+    def __post_init__(self) -> None:
+        if self.planned_count != len(self.assigned_identifiers):
+            raise InvalidAssociateConfigurationError(
+                f"Associate '{self.associate_id}' planned_count does not match the number of assigned identifiers."
+            )
+        if self.planned_count > self.maximum_capacity:
+            raise InvalidAssociateConfigurationError(
+                f"Associate '{self.associate_id}' planned_count exceeds maximum capacity."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class AllocationResult:
+    """The immutable, finalized allocation outcome for a Run."""
+
+    run_id: str
+    sample_count: int
+    total_target: int
+    total_maximum_capacity: int
+    capacity_shortage: int
+    unused_capacity: int
+    required_above_target_confirmation: bool
+    confirmed_above_target: bool
+    confirmed_by: str | None
+    assignments: tuple[AllocationAssignment, ...]
+    allocated_at: datetime

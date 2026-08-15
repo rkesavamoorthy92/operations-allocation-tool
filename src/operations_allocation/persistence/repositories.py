@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from operations_allocation.domain.exceptions import DuplicateRunIdError, InvalidRunStateError, ManifestIntegrityError, PersistenceError
-from operations_allocation.domain.models import Associate, DuplicateResolution, EligiblePopulation, ExecutionManifest, Program, Run, RunConfigurationSnapshot, RunState, SamplingResult
+from operations_allocation.domain.models import Associate, AllocationAssignment, AllocationResult, DuplicateResolution, EligiblePopulation, ExecutionManifest, Program, Run, RunConfigurationSnapshot, RunState, SamplingResult
 from operations_allocation.domain.state_machine import ensure_transition
 from operations_allocation.utils.canonical import deep_thaw
 
@@ -329,6 +329,71 @@ class SamplingResultRepository:
                 sampling_algorithm_version=row["sampling_algorithm_version"],
                 selected_identifiers=tuple(json.loads(row["selected_identifiers_json"])),
                 sampled_at=datetime.fromisoformat(row["sampled_at"]),
+            )
+
+
+class AllocationResultRepository:
+    def __init__(self, database: Any) -> None:
+        self.database = database
+
+    def add(self, result: AllocationResult, connection: sqlite3.Connection | None = None) -> None:
+        assignments_payload = [
+            {
+                "associate_id": a.associate_id,
+                "target": a.target,
+                "maximum_capacity": a.maximum_capacity,
+                "planned_count": a.planned_count,
+                "assigned_identifiers": list(a.assigned_identifiers),
+                "above_target": a.above_target,
+            }
+            for a in result.assignments
+        ]
+        with _write_scope(self.database, connection) as conn:
+            conn.execute(
+                "INSERT INTO allocation_results (run_id, sample_count, total_target, total_maximum_capacity, capacity_shortage, unused_capacity, required_above_target_confirmation, confirmed_above_target, confirmed_by, assignments_json, allocated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    result.run_id,
+                    result.sample_count,
+                    result.total_target,
+                    result.total_maximum_capacity,
+                    result.capacity_shortage,
+                    result.unused_capacity,
+                    int(result.required_above_target_confirmation),
+                    int(result.confirmed_above_target),
+                    result.confirmed_by,
+                    json.dumps(assignments_payload, separators=(",", ":")),
+                    result.allocated_at.isoformat(),
+                ),
+            )
+
+    def get(self, run_id: str) -> AllocationResult:
+        with _read_scope(self.database) as conn:
+            row = conn.execute("SELECT * FROM allocation_results WHERE run_id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise PersistenceError(f"Run '{run_id}' does not have an allocation result.")
+            assignments = tuple(
+                AllocationAssignment(
+                    associate_id=item["associate_id"],
+                    target=item["target"],
+                    maximum_capacity=item["maximum_capacity"],
+                    planned_count=item["planned_count"],
+                    assigned_identifiers=tuple(item["assigned_identifiers"]),
+                    above_target=item["above_target"],
+                )
+                for item in json.loads(row["assignments_json"])
+            )
+            return AllocationResult(
+                run_id=row["run_id"],
+                sample_count=row["sample_count"],
+                total_target=row["total_target"],
+                total_maximum_capacity=row["total_maximum_capacity"],
+                capacity_shortage=row["capacity_shortage"],
+                unused_capacity=row["unused_capacity"],
+                required_above_target_confirmation=bool(row["required_above_target_confirmation"]),
+                confirmed_above_target=bool(row["confirmed_above_target"]),
+                confirmed_by=row["confirmed_by"],
+                assignments=assignments,
+                allocated_at=datetime.fromisoformat(row["allocated_at"]),
             )
 
 
