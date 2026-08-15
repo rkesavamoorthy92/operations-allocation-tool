@@ -75,3 +75,8 @@ class InvalidArtifactFilenameError(OperationsAllocationError):
 
 class ArtifactSourceNotFoundError(OperationsAllocationError):
     """Raised when an imported artifact's source file cannot be found."""
+
+
+class InvalidQcRuleError(OperationsAllocationError):
+    """Raised when a QC rule configuration is structurally invalid or of an
+    unsupported/forbidden type."""
