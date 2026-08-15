@@ -88,3 +88,7 @@ class UnsupportedFileFormatError(OperationsAllocationError):
 
 class ColumnMappingError(OperationsAllocationError):
     """Raised when a required source column cannot be found in an imported file."""
+
+
+class AssignedItemNotFoundError(OperationsAllocationError):
+    """Raised when an allocated identifier has no matching canonical source row."""
