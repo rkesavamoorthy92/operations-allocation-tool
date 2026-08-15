@@ -98,13 +98,9 @@ class SamplingServiceTestCase(unittest.TestCase):
                 connection.execute("DELETE FROM sampling_results WHERE run_id = ?", (run_id,))
 
     def test_reproducible_given_same_snapshot_and_population(self) -> None:
-        # Distinguishing due_date avoids an unrelated pre-existing collision:
-        # run_configuration_snapshots.sha256 is globally UNIQUE and the
-        # canonical payload does not include run_id, so two runs with a
-        # byte-identical setup cannot both freeze successfully today.
         rows = [{"product_id": f"A{i}"} for i in range(1, 21)]
-        run_id_one = self._run_through_frozen_population(sampling={"method": "count", "value": 5}, random_seed="fixed-seed", rows=rows, due_date="2026-09-01")
-        run_id_two = self._run_through_frozen_population(sampling={"method": "count", "value": 5}, random_seed="fixed-seed", rows=rows, due_date="2026-09-02")
+        run_id_one = self._run_through_frozen_population(sampling={"method": "count", "value": 5}, random_seed="fixed-seed", rows=rows)
+        run_id_two = self._run_through_frozen_population(sampling={"method": "count", "value": 5}, random_seed="fixed-seed", rows=rows)
         result_one = self.sampling_service.sample(run_id=run_id_one)
         result_two = self.sampling_service.sample(run_id=run_id_two)
         self.assertEqual(result_one.selected_identifiers, result_two.selected_identifiers)

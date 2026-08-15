@@ -166,6 +166,18 @@ class FoundationTestCase(unittest.TestCase):
             with self.audit_repository.database.transaction() as connection:
                 connection.execute("DELETE FROM audit_logs WHERE audit_id = ?", (event_id,))
 
+    def test_snapshot_hash_includes_run_id_so_identical_setups_do_not_collide(self) -> None:
+        """Regression test: run_configuration_snapshots.sha256 is globally
+        UNIQUE, so two Runs with byte-identical setup (same program
+        configuration, sampling, seed, associates, and due date) must still
+        produce distinct snapshot hashes or the second freeze_setup() call
+        raises a raw PersistenceError instead of succeeding."""
+        first = self.service.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
+        second = self.service.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
+        snapshot_one = self.service.freeze_setup(run_id=first.run_id, program_configuration=valid_config(), sampling={"method": "count", "value": 1}, random_seed="same-seed", associates=[], due_date="2026-09-01")
+        snapshot_two = self.service.freeze_setup(run_id=second.run_id, program_configuration=valid_config(), sampling={"method": "count", "value": 1}, random_seed="same-seed", associates=[], due_date="2026-09-01")
+        self.assertNotEqual(snapshot_one.sha256, snapshot_two.sha256)
+
     def test_snapshot_freeze_rolls_back_when_manifest_fails(self) -> None:
         run = self.service.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
         failing = RunOrchestrationService(runs=self.runs, snapshots=self.snapshots, manifests=FailingManifestRepository(self.manifests.database), audit=self.audit)
