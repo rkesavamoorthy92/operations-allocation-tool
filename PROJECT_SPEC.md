@@ -96,15 +96,27 @@ Users must be able to configure different operational programs.
 
 Configuration should support:
 
-- Program name
-- Input column mapping
-- Response column mapping
+- Program ID and name
+- Primary identifier, normalization, and case-sensitivity rules
+- Input and response column mappings
+- Requiredness, data types, field ownership, and output ordering
+- Validation rules
 - Allocation rules
+- Deterministic tie-breaking rules
 - Sampling rules
-- QC rules
+- QC rules (restricted declarative model)
 - Error configuration
 - Output configuration
+- Filename behavior
 - Email template configuration
+
+Program configuration must use a versioned, machine-validatable schema. It must be validated before it can be used to create a Run Configuration Snapshot.
+
+When a Run is created, it begins in **Draft/Setup**. The user configures the Program, source file, sampling percentage or count, random-seed choice, associate roster, targets, maximum capacities, due date, and other program-configured settings. The active program configuration and final setup values are copied into an immutable Run Configuration Snapshot only when the user confirms the Run setup.
+
+After the snapshot is frozen, configuration used by the Run must not be silently changed.
+
+See `ARCHITECTURE.md` for Run-centric design and service boundaries.
 
 The first program will be:
 
@@ -114,15 +126,20 @@ MX PT
 
 # 5. Input Data
 
-The application must accept common operational data formats:
+## V1 Supported Formats
+
+The application must accept the following operational data formats in v1:
 
 - `.xlsx`
-- `.xls` where technically supported
 - `.csv`
 
-The original source file must never be modified.
+`.xls` support is deferred beyond v1.
 
-The application must create a working copy or process the source in memory.
+## V1 Performance Target
+
+The application should support input files of approximately **100,000 rows** per file in v1.
+
+The original source file must never be modified. The authoritative processed source must be an imported local artifact associated with the Run, rather than a mutable external file path. Relevant parser and import settings must be recorded with that artifact.
 
 ---
 
@@ -148,11 +165,13 @@ The allocation process will also generate:
 
 These fields must be configurable through column mapping rather than permanently hard-coded.
 
+The configuration must distinguish source fields, generated/system fields, and associate-editable response fields. For MX PT, Product ID, Product Name, Short Description, Long Description, and PT are source evidence. Partner Feedback, Correct PT, PT Key, and Comments are associate response fields. If a source file contains columns with response-style names, its original values must be preserved separately from returned associate values.
+
 ---
 
 # 7. Product ID
 
-Product ID is the primary unique identifier for an item.
+Product ID is the primary unique identifier for an item in the MX PT workflow.
 
 The application must:
 
@@ -161,6 +180,23 @@ The application must:
 - Detect duplicate Product IDs.
 - Use Product ID for reconciliation.
 - Never use Excel row number as the permanent item identifier.
+
+## Product ID Normalization
+
+Product IDs must be treated as strings internally.
+
+Normalization rules:
+
+- Trim leading and trailing whitespace.
+- Preserve leading zeros.
+- Do not silently alter identifier values.
+- Do not convert scientific notation into another value.
+- Preserve both the original Product ID and the normalized Product ID.
+- MX PT comparisons are case-sensitive unless explicitly configured otherwise.
+
+All allocation, consolidation, QC, and error matching must use the normalized Product ID unless audit inspection requires the original value.
+
+If normalization creates a duplicate Product ID, the system must create a duplicate-ID exception.
 
 ---
 
@@ -194,7 +230,47 @@ Duplicate IDs:
 Missing IDs:
 0
 
+## Validation Severity
+
+Validation results must use the following severity levels:
+
+| Severity | Behavior |
+|----------|----------|
+| **Critical** | Blocks processing until resolved |
+| **Warning** | Requires user acknowledgement where appropriate; does not block by itself |
+| **Information** | Informational only; does not block processing |
+
+Critical failures block processing.
+
+Warnings require user acknowledgement where appropriate.
+
+Information messages do not block processing.
+
+## Duplicate Product IDs
+
+Duplicate Product IDs are a **Critical** validation issue.
+
+Duplicate Product IDs require **manual resolution** before sampling may proceed. In v1, the system must not automatically keep the first or last record and must not silently merge duplicates. Affected records are excluded from the eligible population until resolved.
+
 The user should not be allowed to proceed if critical validation failures exist unless the user explicitly resolves or excludes the affected records.
+
+For every duplicate-ID resolution or exclusion, record original and normalized identifier values, resolution action, user, timestamp, and reason.
+
+## Validation and Sampling Sequence
+
+Sampling must occur only after validation.
+
+Processing sequence:
+
+```text
+Input
+→ Validation
+→ User-approved exclusions / resolution
+→ Freeze eligible population
+→ Random sampling
+```
+
+The eligible population used for sampling must be recorded for auditability and reproducibility.
 
 ---
 
@@ -220,15 +296,40 @@ Expected sample:
 
 The randomizer must:
 
+- Operate only on the frozen eligible population for the Run.
 - Select unique items.
-- Use Product ID as the unique identifier.
+- Use normalized Product ID as the unique identifier.
 - Never modify the original dataset.
-- Record the sampling percentage.
-- Record the selected item count.
-- Record the input item count.
+- Record the sampling method.
+- Record the requested percentage or requested count.
+- Record the calculated sample count before rounding (for percentage sampling).
+- Record the actual sample count after rounding.
+- Record the eligible population count.
+- Record eligible population membership.
+- Record canonical ordering and fingerprint of the eligible population.
 - Record the random seed.
+- Record RNG algorithm and version.
+- Record sampling algorithm and version.
 - Record timestamp.
 - Associate the sample with a Run ID.
+
+## Percentage Sampling Rounding
+
+Percentage sampling must use explicit **HALF-UP** rounding to the nearest whole item. Python's default `round()` must not be used where it would produce a different result.
+
+Example:
+
+56,432 × 3% = 1,692.96 → 1,693
+
+1,692.5 → 1,693
+
+1,692.4 → 1,692
+
+The system must store:
+
+- Requested percentage
+- Calculated sample count before rounding
+- Actual sample count
 
 ---
 
@@ -243,7 +344,7 @@ The user may choose:
 
 The seed must be stored with the allocation run.
 
-If the same source dataset, sampling configuration, and random seed are used, the randomizer should produce the same selection.
+If the same source dataset, eligible population, sampling configuration, and random seed are used, the randomizer should produce the same selection.
 
 This is required for auditability and reproducibility.
 
@@ -277,13 +378,43 @@ Target = 100
 
 The system must not assume equal allocation across associates.
 
+## Insufficient Capacity
+
+If total maximum capacity is less than the sample count:
+
+- Allocation finalization must be blocked.
+- The user must see the shortage clearly.
+- The system must not silently discard items.
+- The system must not silently redistribute items.
+- The user can resolve the issue by changing associates, targets, capacity, or sampling configuration.
+
+## Excess Capacity
+
+If total maximum capacity is greater than the sample count:
+
+- Allocate only the sampled items.
+- Do not automatically increase sampling.
+- Show unused capacity in the allocation preview.
+
+## Target and Maximum Capacity
+
+- **Target** is the normal allocation level for an associate.
+- **Maximum Capacity** is the upper bound for that associate in the Run.
+- Allocation above target but below maximum capacity requires **explicit user confirmation** before finalization.
+- When sampled items exceed total target capacity but total maximum capacity is sufficient, overflow must be distributed deterministically using the configured overflow strategy. The v1 strategy is proportional distribution based on remaining capacity, with Associate ID tie-breaking.
+- The system must not silently redistribute work.
+
+## Inactive Associates
+
+Inactive associates are **automatically excluded** from allocation. They remain in the global master roster for historical reference.
+
 ---
 
 # 12. Associate Configuration
 
-Associate information should be configurable.
+Associate master data is **global** across the application.
 
-Minimum fields:
+Minimum master fields:
 
 - Associate ID
 - Associate Name
@@ -294,7 +425,9 @@ Minimum fields:
 - Maximum Capacity
 - Active / Inactive status
 
-Target and maximum capacity must be configurable per allocation run.
+Target, maximum capacity, experience/configuration, and other run-specific associate settings are copied into the **Run Configuration Snapshot** when the user confirms Run setup and the snapshot is frozen.
+
+Run processing must use the snapshot copy, not mutable master data alone.
 
 The system must support new associates with lower targets and experienced associates with higher targets.
 
@@ -308,41 +441,123 @@ The preview should display:
 
 - Total input items
 - Valid items
+- Eligible population count
 - Sampling percentage
 - Sample count
 - Number of associates
 - Target allocation per associate
 - Total planned allocation
 - Remaining items
+- Capacity shortage (if total maximum capacity is less than sample count)
+- Unused capacity (if total maximum capacity exceeds sample count)
 - Capacity issues
+- Allocation above target requiring confirmation
 - Allocation exceptions
 
 The user must explicitly confirm the allocation before final output is generated.
 
+Allocation above target but below maximum capacity requires a separate explicit user confirmation.
+
+Allocation finalization must be blocked when total maximum associate capacity is less than the sample count.
+
 ---
 
-# 14. Allocation Run
+# 14. Run
 
 Every allocation execution must generate a unique Run ID.
 
+## Run ID Format
+
+Run IDs must follow this format:
+
+```text
+{PROGRAM}-{YYYYMMDD}-{SEQUENCE}
+```
+
 Example:
 
+```text
 MX-PT-20260815-001
+```
 
-The Run ID must be associated with:
+Rules:
 
-- Source dataset
+- `{PROGRAM}` identifies the operational program.
+- `{YYYYMMDD}` is the Run creation date.
+- `{SEQUENCE}` is a daily sequence number starting at `001`.
+- The sequence resets daily per program.
+- Run IDs are unique and **never reused**.
+
+The **Run** is the central domain concept in the application. Every Run begins in a Draft/Setup state.
+
+A Run connects:
+
+- Source input
+- Run Configuration Snapshot
+- Eligible population
+- Sampling
+- Allocation
+- Distribution
+- Returned files
+- Consolidation
+- QC
+- Errors
+- Insights
+- Audit
+- Artifacts
+
+The Run ID must be associated with all of the above.
+
+## Run Configuration Snapshot
+
+When the user confirms Run setup, the system must freeze an immutable Run Configuration Snapshot containing:
+
+- Program configuration version
+- Column mappings
 - Sampling configuration
 - Random seed
-- Associate list
-- Allocation configuration
-- Allocation output
-- Split files
-- Consolidation
-- QC results
-- Error results
-- Insights
-- Audit information
+- Associate targets
+- Associate capacities
+- Associate experience/configuration and active/inactive status
+- Due date
+- QC rules
+- Error rules
+- Email template configuration
+
+Historical Runs must continue to reference their original configuration even if the current program configuration changes.
+
+All Run processing must use the Run Configuration Snapshot, not mutable program settings.
+
+## Run State Machine
+
+The system must define and enforce these states and valid transitions:
+
+```text
+DRAFT → SNAPSHOT_FROZEN → VALIDATED → ELIGIBLE_POPULATION_FROZEN
+→ SAMPLED → ALLOCATED → DISTRIBUTED → RETURNED → CONSOLIDATED
+→ QC_COMPLETED → COMPLETED
+
+DRAFT → CANCELLED | ABANDONED
+Any non-terminal state → FAILED
+```
+
+Transitions must be auditable and invalid transitions must be prevented.
+
+## Execution Manifest and Immutable Evidence
+
+Each Run must have an execution manifest containing:
+
+- Run ID
+- Configuration snapshot hash
+- Source artifact hash
+- Eligible population hash
+- Sampling algorithm and version
+- RNG algorithm and version
+- Random seed
+- Allocation strategy and version
+- Output artifact hashes
+
+The execution manifest supports reproducibility and auditability. Imported canonical source, eligible population, sampling result, allocation result, returned raw files, reconciliation records, artifact records, and the execution manifest are immutable Run evidence. Corrections must be represented through versioned resolution records or events rather than silently mutating historical evidence.
 
 ---
 
@@ -350,20 +565,44 @@ The Run ID must be associated with:
 
 After allocation, the application must generate separate Excel files for each associate.
 
-Example:
-
-A001_Kumar.xlsx
-A002_Ravi.xlsx
-A003_Priya.xlsx
-
 Each file must contain only the items assigned to that associate.
 
-The generated files should include relevant metadata such as:
+Associate files must expose identity at three levels:
+
+### A. Filename
+
+The v1 filename convention is:
+
+```text
+{PROGRAM}_{ASSOCIATE_ID}_{ASSOCIATE_NAME}_{RUN_ID}.xlsx
+```
+
+Example:
+
+```text
+MX-PT_A001_Kumar_MX-PT-20260815-001.xlsx
+```
+
+Associate ID is the authoritative machine identifier. Associate Name is display-only and must be sanitized for filenames.
+
+### B. Metadata Sheet
+
+Each associate file must include a metadata sheet containing:
 
 - Run ID
+- Program
 - Associate ID
 - Associate Name
-- Allocation Date
+- Generation timestamp
+
+### C. Data Columns
+
+The data sheet must contain:
+
+- Run ID
+- Allocated To
+
+Consolidation must cross-check filename, metadata sheet, and data-column identity against the Run Configuration Snapshot and allocation records.
 
 The original master allocation dataset must remain unchanged.
 
@@ -397,7 +636,7 @@ When associates complete the assigned work, they may provide or update fields su
 - PT Key
 - Comments
 
-The exact response fields must be configurable by program.
+The exact response fields must be configurable by program and stored separately from source evidence.
 
 The consolidation engine must not assume that every program uses the same response fields.
 
@@ -409,26 +648,32 @@ The application must be able to generate Outlook email drafts based on the alloc
 
 The email content must be dynamic.
 
-The draft may contain:
+## V1 Due Date
 
-- Associate name
-- Run ID
-- Number of assigned items
-- Due date
-- Program name
-- Instructions
-- Attachment
+In v1, the due date is **entered by the user**.
+
+## Email Template Tokens
+
+Email templates must support the following placeholders:
+
+- `{{associate_name}}`
+- `{{program_name}}`
+- `{{run_id}}`
+- `{{item_count}}`
+- `{{due_date}}`
+
+The draft may also contain instructions and attachments.
 
 The application must support:
 
 1. Consolidated team email draft.
 2. Individual associate email drafts.
 
-The application must NEVER automatically send emails.
+The application must **NEVER** automatically send emails.
 
-The user must review and send the draft manually.
+Outlook creates drafts only. The user must review and send the draft manually.
 
-Outlook integration is Windows-specific and should be isolated from the core business logic.
+Outlook integration is Windows-specific and should be isolated from the core business logic via the Outlook Platform Adapter. V1 supports Classic desktop Outlook through COM on Windows. If Outlook is unavailable, core allocation workflow must continue and provide a manual email fallback.
 
 ---
 
@@ -440,16 +685,27 @@ Users should be able to select multiple returned files at once.
 
 The consolidation engine must:
 
-1. Identify the Run ID.
-2. Identify the associate.
-3. Match records using Product ID.
-4. Compare returned records against the original allocation.
-5. Detect missing items.
-6. Detect duplicate items.
-7. Detect unexpected items.
-8. Detect incorrect associate assignments.
-9. Detect incomplete returned files.
-10. Generate a consolidated master dataset.
+1. Identify the Run ID from filename, metadata sheet, and data columns.
+2. Identify the associate from filename, metadata sheet, and data columns.
+3. Cross-check Run ID, Program, Associate ID, Associate Name, and Allocated To across all identity levels.
+4. Match records using normalized Product ID.
+5. Compare returned records against the original allocation.
+6. Detect missing items.
+7. Detect duplicate items.
+8. Detect unexpected items.
+9. Detect incorrect associate assignments.
+10. Detect identity mismatches across filename, metadata, and data columns.
+11. Detect incomplete returned files.
+12. Detect invalid Run ID references.
+13. Generate a consolidated master dataset.
+
+Consolidation must maintain three conceptual layers:
+
+1. Raw imported returned rows.
+2. Reconciled valid rows.
+3. Quarantined or resolved rows used by final export.
+
+The system must never silently choose between conflicting returned responses. Conflicting values require manual resolution.
 
 ---
 
@@ -476,6 +732,22 @@ The application must display reconciliation results before final consolidation.
 
 The user must be able to inspect exceptions.
 
+## Critical Exceptions and Final Export
+
+Open **critical** exceptions block final consolidated export **by default**.
+
+Critical exceptions include missing allocated items, duplicate items, wrong-associate items, unexpected items, invalid Run IDs, and conflicting response data.
+
+The user may **explicitly override** and finalize with open exceptions.
+
+Overrides require user, timestamp, reason, and exception/reconciliation version, and must be audited.
+
+## Wrong-Associate Rows
+
+Rows detected as assigned to the wrong associate must be **quarantined** for manual resolution.
+
+They must not be silently merged into the consolidated output.
+
 ---
 
 # 21. Consolidated Output
@@ -497,13 +769,27 @@ The consolidated file should be exportable as Excel.
 
 The application must support importing QC reports.
 
-QC rules must be configurable by program.
+QC rules must be configurable by program and must use a restricted declarative configuration model.
 
-For the initial MX PT workflow:
+The application must NOT use `eval()`, `exec()`, arbitrary Python expressions, or unrestricted user-entered formulas for QC calculation.
 
-QC Score is calculated as:
+The initial supported rule type is:
+
+- `ratio_percentage`
+
+Configurable fields:
+
+- `numerator`
+- `denominator`
+- `zero_denominator_behavior`
+
+For the initial MX PT workflow, the intended calculation is:
 
 Pass Count / Audited Count × 100
+
+If Audited Count = 0, the QC result is **N/A**.
+
+For MX PT, Error Rate is Fail Count / Audited Count × 100. If Audited Count = 0, Error Rate is **N/A**.
 
 Example:
 
@@ -519,16 +805,26 @@ Fail:
 QC Score:
 80%
 
+QC calculations must use the QC rules stored in the Run Configuration Snapshot for that Run.
+
+For MX PT v1, when the denominator (Audited Count) is zero, the QC result is **N/A**.
+
 ---
 
 # 23. QC Metrics
+
+QC must support metrics at three levels:
+
+- **Item-level**
+- **Associate-level**
+- **Run-level**
 
 The application should calculate at minimum:
 
 - Items audited
 - Pass count
 - Fail count
-- QC score
+- QC score (or N/A when Audited Count = 0)
 - Error rate
 
 The application should support:
@@ -543,9 +839,13 @@ The application should support:
 
 # 24. Error Reporting
 
+Error reporting must support both **imported** and **generated** errors.
+
 Error reporting must be configurable by program.
 
-Error categories must NOT be hard-coded.
+Error categories and types must NOT be hard-coded.
+
+Do not hard-code error taxonomies from other Operations programs.
 
 Each program may define its own:
 
@@ -556,6 +856,10 @@ Each program may define its own:
 - Error classification rules
 
 MX PT may have one error structure while another program may use a completely different structure.
+
+Error rules are frozen in the Run Configuration Snapshot for each Run.
+
+Error processing for a Run must use the error rules stored in that Run's Configuration Snapshot.
 
 ---
 
@@ -592,10 +896,16 @@ AI-generated narrative summaries may be introduced as a later enhancement.
 
 The system must maintain historical run information.
 
+Historical comparison must use the **previous completed Run for the same Program**.
+
+If no previous completed Run exists, historical comparison is **N/A**.
+
+A Run is **COMPLETED** only when consolidation is finalized, critical exceptions are resolved or explicitly overridden, and QC processing is completed.
+
 Users should be able to compare:
 
-- Current QC vs previous run
-- Current error rate vs previous run
+- Current QC vs previous completed run
+- Current error rate vs previous completed run
 - Associate performance over time
 - Program performance over time
 - Allocation completion over time
@@ -623,19 +933,32 @@ Audit information should include:
 
 - Run ID
 - Program
-- User
+- OS username
+- Application display name
 - Timestamp
 - Source file
 - Input count
 - Valid count
-- Sampling percentage
+- Eligible population count
+- Exclusion summary
+- Sampling method
+- Sampling percentage or requested count
+- Calculated sample count before rounding
+- Actual sample count
 - Random seed
-- Sample count
+- RNG algorithm/version
+- Sampling algorithm/version
+- Eligible population membership/fingerprint
 - Associate count
 - Allocation count
+- Capacity shortage indicators
+- Unused capacity summary
 - Consolidation count
 - QC count
 - Error count
+- Consolidation override reason (when applicable)
+- Consolidation override user, timestamp, and exception/reconciliation version (when applicable)
+- Run Configuration Snapshot reference
 - Output files
 - Processing status
 
@@ -674,7 +997,22 @@ AllocationTool.exe
 
 The application should eventually be packaged using PyInstaller or an equivalent packaging mechanism.
 
+## Application Data Storage
+
+Packaged application data must use a **user-writable Windows local application data directory**.
+
+Do **not** store mutable production data inside the EXE installation directory.
+
+Mutable data includes:
+
+- SQLite database
+- Run output artifacts
+- Logs
+- Application settings
+
 The development environment may be macOS, but Windows testing is mandatory before production release.
+
+Windows-specific functionality must remain behind platform interfaces. Core business logic must remain platform-independent.
 
 ---
 
@@ -692,7 +1030,25 @@ Initial technology stack:
 - pywin32 for Windows Outlook integration
 - PyInstaller for Windows packaging
 
-The application should use a modular architecture.
+The application should use a modular, Run-centric architecture.
+
+See `ARCHITECTURE.md` for:
+
+- Program Configuration Service
+- Run Orchestration Service
+- Run State Machine
+- Run Configuration Snapshot
+- Associate Master
+- Canonical Item Model
+- Eligible Population
+- Allocation Strategy
+- Reconciliation Pipeline
+- QC Rule Evaluator
+- Error Rule Configuration
+- File Artifact Manager
+- Outlook Platform Adapter
+- Audit Service
+- Reporting Service
 
 UI logic must be separated from business logic.
 

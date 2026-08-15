@@ -116,52 +116,154 @@ Use Product ID for:
 - QC matching
 - Error matching
 
+Product IDs must be treated as strings internally.
+
+Normalization rules:
+
+- Trim leading and trailing whitespace.
+- Preserve leading zeros.
+- Do not silently alter identifier values.
+- Do not convert scientific notation into another value.
+- Preserve both the original Product ID and the normalized Product ID.
+- MX PT comparisons are case-sensitive unless explicitly configured otherwise.
+
+If normalization creates a duplicate Product ID, create a duplicate-ID exception.
+
 The architecture must allow future programs to define their own primary identifier.
 
 ---
 
-# 7. Run ID
+# 7. Run ID and Run-Centric Design
 
 Every allocation workflow must have a unique Run ID.
 
+## Run ID Format
+
+Run IDs must follow this format:
+
+```text
+{PROGRAM}-{YYYYMMDD}-{SEQUENCE}
+```
+
 Example:
 
+```text
 MX-PT-20260815-001
+```
 
-All related records must be traceable through the Run ID.
+Rules:
 
-The Run ID should be associated with:
+- Sequence resets daily per program.
+- Run IDs are unique and **never reused**.
 
-- Input
+The **Run** is the central domain concept.
+
+A Run connects:
+
+- Source input
+- Run Configuration Snapshot
+- Eligible population
 - Sampling
 - Allocation
-- Associate files
+- Distribution
 - Returned files
 - Consolidation
 - QC
 - Errors
-- Reports
+- Insights
 - Audit
+- Artifacts
+
+All related records must be traceable through the Run ID.
+
+Every Run begins in a Draft/Setup state. The user configures Program, source file, sampling percentage or count, random seed or automatic seed, associate roster, targets, maximum capacities, due date, and other program-configured settings. Freeze the immutable Run Configuration Snapshot only after the user confirms setup.
+
+The snapshot must contain:
+
+- Program configuration version
+- Column mappings
+- Sampling configuration
+- Random seed
+- Associate targets
+- Associate capacities
+- Associate active/inactive status at snapshot freezing
+- Associate experience/configuration and due date
+- QC rules
+- Error rules
+- Email template configuration
+
+Associate master data is global. Snapshot copies are authoritative for Run processing.
+
+Historical Runs must continue to reference their original snapshot even if the current program configuration or associate master data changes.
+
+After snapshot freezing, configuration used by the Run must not be silently changed.
 
 ---
 
 # 8. Randomization
 
+Random sampling must occur only after validation and user-approved exclusions/resolution.
+
+Processing sequence:
+
+```text
+Input
+→ Validation
+→ User-approved exclusions / resolution
+→ Freeze eligible population
+→ Random sampling
+```
+
+The eligible population used for sampling must be recorded for auditability.
+
 Random sampling must be reproducible when a seed is provided.
 
 Always record:
 
-- Input count
+- Eligible population count
+- Eligible population membership
 - Sampling method
 - Sampling percentage or requested count
+- Calculated sample count before rounding (for percentage sampling)
 - Actual sample count
 - Random seed
+- RNG algorithm/version
+- Sampling algorithm/version
+- Canonical ordering/fingerprint of eligible population
 - Run ID
 - Timestamp
+
+Percentage sampling must use explicit HALF-UP rounding to the nearest whole item. Do not use Python's default `round()` where it would produce a different result.
+
+Example:
+
+56,432 × 3% = 1,692.96 → 1,693
+
+1,692.5 → 1,693
+
+1,692.4 → 1,692
 
 Never use uncontrolled randomness when the operation requires auditability.
 
 Do not modify the source dataset during sampling.
+
+Duplicate Product IDs require **manual resolution** before sampling may proceed. Do not automatically keep first or last records and do not silently merge. Exclude affected records from the eligible population until the user resolves them. Record original and normalized values, resolution action, user, timestamp, and reason.
+
+---
+
+# 8A. Data Validation
+
+Validation must use these severity levels:
+
+| Severity | Behavior |
+|----------|----------|
+| **Critical** | Blocks processing until resolved |
+| **Warning** | Requires user acknowledgement where appropriate |
+| **Information** | Does not block processing |
+
+Critical failures block processing.
+
+Duplicate Product IDs are Critical and require manual resolution before sampling.
 
 ---
 
@@ -178,10 +280,48 @@ The allocation engine must detect:
 - Duplicate allocations
 - Invalid associates
 - Inactive associates
+- Unused capacity
 
 Do not silently discard unallocated items.
 
 Do not silently redistribute items when the redistribution rule has not been defined.
+
+## Insufficient Capacity
+
+If total maximum capacity is less than the sample count:
+
+- Allocation finalization must be blocked.
+- The user must see the shortage clearly.
+- The system must not silently discard items.
+- The system must not silently redistribute items.
+- The user can resolve the issue by changing associates, targets, capacity, or sampling configuration.
+
+## Excess Capacity
+
+If total maximum capacity is greater than the sample count:
+
+- Allocate only the sampled items.
+- Do not automatically increase sampling.
+- Show unused capacity in the allocation preview.
+
+## Target and Maximum Capacity
+
+- **Target** is the normal allocation level.
+- **Maximum Capacity** is the upper bound.
+- Allocation above target but below maximum capacity requires **explicit user confirmation** before finalization.
+- If sampled items exceed total target capacity but maximum capacity is sufficient, use the configured deterministic overflow strategy after explicit confirmation. V1 uses proportional distribution based on remaining capacity with Associate ID tie-breaking.
+
+## Inactive Associates
+
+Inactive associates are **automatically excluded** from allocation. They remain in the master roster for historical reference.
+
+## Associate Master Data
+
+Associate master data is **global**.
+
+Target, capacity, experience/configuration, and run-specific associate settings are copied into the Run Configuration Snapshot when the user confirms Run setup.
+
+Run processing must use the snapshot copy, not mutable master data alone.
 
 ---
 
@@ -192,14 +332,22 @@ Allocation must provide a preview before finalization.
 The user must be able to see:
 
 - Total items
+- Eligible population count
 - Sample count
 - Associate count
 - Target per associate
 - Planned allocation
 - Remaining items
+- Capacity shortage
+- Unused capacity
+- Above-target allocation requiring confirmation
 - Exceptions
 
 Final allocation requires explicit confirmation.
+
+Allocation above target but below maximum capacity requires a separate explicit confirmation.
+
+Allocation finalization must be blocked when total maximum associate capacity is less than the sample count.
 
 ---
 
@@ -207,16 +355,40 @@ Final allocation requires explicit confirmation.
 
 Returned associate files must be reconciled against the original allocation.
 
+Associate files must expose identity at three levels:
+
+1. **Filename** — `{PROGRAM}_{ASSOCIATE_ID}_{ASSOCIATE_NAME}_{RUN_ID}.xlsx`
+2. **Metadata sheet** — Run ID, Program, Associate ID, Associate Name, Generation timestamp
+3. **Data columns** — Run ID, Allocated To
+
+Consolidation must cross-check all available identity information against the Run Configuration Snapshot and allocation records.
+
+Associate ID is the authoritative machine identifier. Associate Name is display-only and must be sanitized for filenames.
+
 The system must detect:
 
 - Missing items
 - Duplicate items
 - Unexpected items
 - Wrong associate
+- Identity mismatches across filename, metadata, and data columns
 - Incomplete files
 - Invalid Run ID
+- Conflicting response data
+
+Wrong-associate rows must be **quarantined** for manual resolution.
+
+Open **critical** exceptions block final consolidated export **by default**.
+
+The user may **explicitly override** and finalize with open exceptions.
+
+Overrides require user, timestamp, reason, and exception/reconciliation version, and must be audited.
 
 Never assume a returned file is correct merely because it contains a valid Product ID.
+
+Matching must use normalized Product ID values.
+
+Maintain raw imported returned rows, reconciled valid rows, and quarantined/resolved rows used by final export as separate conceptual layers. Never silently choose between conflicting returned responses; require a versioned manual resolution record.
 
 ---
 
@@ -224,13 +396,38 @@ Never assume a returned file is correct merely because it contains a valid Produ
 
 QC calculations must be configurable by program.
 
-For MX PT, the initial rule is:
+QC rules must use a restricted declarative configuration model.
+
+Do NOT use:
+
+- `eval()`
+- `exec()`
+- Arbitrary Python expressions
+- Unrestricted user-entered formulas
+
+The initial supported rule type is:
+
+- `ratio_percentage`
+
+Configurable fields:
+
+- `numerator`
+- `denominator`
+- `zero_denominator_behavior`
+
+For MX PT, the initial intended calculation is:
 
 Pass Count / Audited Count × 100
 
+If Audited Count = 0, the QC result is **N/A**.
+
+For MX PT, Error Rate is Fail Count / Audited Count × 100. If Audited Count = 0, Error Rate is N/A.
+
+QC must support item-level, associate-level, and run-level metrics.
+
 Do not hard-code this formula into the generic QC engine.
 
-The engine must obtain the calculation rule from configuration.
+The engine must obtain the calculation rule from the Run Configuration Snapshot and evaluate it through the QC Rule Evaluator.
 
 Never silently treat missing QC results as Pass.
 
@@ -238,11 +435,17 @@ Never silently treat missing QC results as Pass.
 
 # 13. Error Classification
 
-Error categories must be configurable.
+Error reporting must support both **imported** and **generated** errors.
 
-Do not hard-code categories from other Operations programs.
+Error categories and types must be configurable by program.
+
+Do not hard-code categories or taxonomies from other Operations programs.
 
 Do not assume that MX PT uses the same error taxonomy as another program.
+
+Error rules are frozen in the Run Configuration Snapshot for each Run.
+
+Error processing for a Run must use the error rules stored in that Run's Configuration Snapshot.
 
 ---
 
@@ -263,6 +466,12 @@ The deterministic analytics engine is responsible for:
 
 An AI/LLM must not be responsible for calculating operational metrics.
 
+Historical comparison must use the **previous completed Run for the same Program**.
+
+If no previous completed Run exists, historical comparison is **N/A**.
+
+A Run is Completed only when consolidation is finalized, critical exceptions are resolved or explicitly overridden, and QC processing is completed.
+
 If a future LLM is introduced, it should consume validated metrics and generate narrative summaries.
 
 ---
@@ -275,16 +484,27 @@ Record:
 
 - Run ID
 - Program
-- User
+- OS username
+- Application display name
 - Timestamp
 - Input count
-- Sampling information
+- Eligible population count
+- Exclusion summary
+- Sampling information (method, requested value, calculated count before rounding, actual sample count)
 - Random seed
+- RNG algorithm/version
+- Sampling algorithm/version
+- Eligible population membership/fingerprint
 - Associate information
 - Allocation count
+- Capacity shortage indicators
+- Unused capacity summary
 - Consolidation status
+- Consolidation override reason (when applicable)
+- Consolidation override user, timestamp, and exception/reconciliation version (when applicable)
 - QC results
 - Error results
+- Run Configuration Snapshot reference
 - Output files
 - Processing status
 
@@ -298,11 +518,21 @@ Outlook integration must create drafts only.
 
 The application must NEVER automatically send emails.
 
+In v1, due date is **entered by the user**.
+
+Email templates must support these placeholders:
+
+- `{{associate_name}}`
+- `{{program_name}}`
+- `{{run_id}}`
+- `{{item_count}}`
+- `{{due_date}}`
+
 Email content must be dynamically generated from the current Run.
 
-The Outlook implementation must remain isolated from the core business logic.
+The Outlook implementation must remain isolated from the core business logic via the Outlook Platform Adapter.
 
-The application should remain usable if Outlook is unavailable.
+V1 Outlook integration targets Classic desktop Outlook via COM on Windows. The application should remain usable if Outlook is unavailable and provide a manual email fallback.
 
 ---
 
@@ -333,12 +563,15 @@ UI → allocation calculations → database
 Use clear separation between:
 
 - UI
-- Application services
-- Core business logic
-- Data access
-- File processing
+- Application services (including Program Configuration Service, Run Orchestration Service, Audit Service, and Reporting Service)
+- Core business logic (including Allocation Strategy, Reconciliation Pipeline, and QC Rule Evaluator)
+- Data access (including Associate Master)
+- File processing (including File Artifact Manager)
 - Reporting
-- Outlook integration
+- Outlook integration (via Outlook Platform Adapter)
+- Error Rule Configuration
+
+Follow `ARCHITECTURE.md` for Run State Machine, Run Configuration Snapshot, Canonical Item Model, Eligible Population, and service boundaries.
 
 Avoid large monolithic files.
 
@@ -379,7 +612,11 @@ or:
 
 C:\Users\...
 
-Use application-relative paths or configurable paths.
+Use application-relative paths or configurable paths on development platforms.
+
+On Windows, mutable production data must use a user-writable local application data directory.
+
+Do **not** store mutable production data inside the EXE installation directory.
 
 The application must work for different users.
 
@@ -397,7 +634,48 @@ Program configuration should be stored in:
 - JSON
 - Other explicitly approved configuration mechanisms
 
-The configuration used for a Run must be preserved so the Run remains reproducible.
+Program configuration must use a versioned, machine-validatable schema. It must cover Program ID, primary identifier, identifier normalization, case sensitivity, input and response columns, requiredness, data types, field ownership, output ordering, validation rules, allocation strategy, tie-breaking rules, QC mappings, error mappings, and filename behavior.
+
+When Run setup is confirmed, freeze an immutable Run Configuration Snapshot containing:
+
+- Program configuration version
+- Column mappings
+- Sampling configuration
+- Random seed
+- Associate targets
+- Associate capacities
+- QC rules
+- Error rules
+- Email template configuration
+
+Historical Runs must continue to reference their original snapshot even if the current program configuration changes.
+
+All Run processing must use the Run Configuration Snapshot, not mutable program settings.
+
+## Immutable Evidence and Execution Manifest
+
+The authoritative source is the imported local artifact associated with the Run, not a mutable external path. Record relevant parser/import settings.
+
+Treat imported canonical source, eligible population, sampling result, allocation result, returned raw files, reconciliation records, artifact records, and execution manifest as immutable Run evidence. Corrections must use versioned resolution records/events rather than silently mutating history.
+
+For every imported or generated artifact record SHA-256 hash, byte size, original filename, import/generation timestamp, Run ID, and artifact type. Never overwrite source artifacts. Generated outputs should use temporary-file plus atomic rename where practical.
+
+Each Run must have an execution manifest containing Run ID, configuration snapshot hash, source artifact hash, eligible population hash, sampling algorithm/version, RNG algorithm/version, random seed, allocation strategy/version, and output artifact hashes.
+
+## Run State Machine
+
+Use and enforce these states:
+
+```text
+DRAFT → SNAPSHOT_FROZEN → VALIDATED → ELIGIBLE_POPULATION_FROZEN
+→ SAMPLED → ALLOCATED → DISTRIBUTED → RETURNED → CONSOLIDATED
+→ QC_COMPLETED → COMPLETED
+
+DRAFT → CANCELLED | ABANDONED
+Any non-terminal state → FAILED
+```
+
+Define and audit valid transitions. Prevent invalid transitions.
 
 ---
 
@@ -419,15 +697,29 @@ Tests must include normal and edge cases.
 Examples:
 
 - Empty input
-- Duplicate IDs
+- Duplicate IDs requiring manual resolution before sampling
 - Missing IDs
+- Validation severity (Critical/Warning/Information)
 - Invalid percentages
 - Zero capacity
-- Insufficient capacity
+- Insufficient capacity blocking finalization
+- Excess capacity / unused capacity reporting
+- Above-target allocation requiring confirmation
+- Inactive associate exclusion
+- Product ID normalization (whitespace, leading zeros, case sensitivity)
+- Percentage sampling rounding
+- Eligible population freeze before sampling
+- Associate filename convention validation
 - Duplicate returned records
 - Missing returned records
 - Invalid Run ID
-- Zero audited records
+- Associate file identity cross-check failures
+- Wrong-associate row quarantine
+- Consolidation override with audited reason
+- Zero audited records (QC result N/A)
+- Restricted QC rule evaluation (`ratio_percentage`)
+- Historical comparison vs previous completed Run (and N/A when none)
+- Run ID format and daily sequence uniqueness
 
 ---
 
@@ -474,6 +766,10 @@ Do not store raw confidential operational data in logs.
 ---
 
 # 26. Excel Processing
+
+V1 supports `.xlsx` and `.csv` only. `.xls` is deferred.
+
+V1 performance target: approximately **100,000 rows** per input file.
 
 Use Pandas for data processing.
 
@@ -669,3 +965,106 @@ do not silently choose one.
 Identify the conflict and request clarification.
 
 The goal is to build a reliable Operations application, not merely to produce code quickly.
+
+---
+
+# 36. V1 Finalized Business Rules Summary
+
+The following v1 business rules are non-negotiable. Do not implement alternatives without explicit approval.
+
+## Allocation
+
+1. Block final allocation if total available capacity is below sample count.
+2. If capacity exceeds sample count, allocate only sampled items and show unused capacity.
+3. Target is the normal allocation level.
+4. Allocation above target but below maximum capacity requires explicit user confirmation.
+5. Inactive associates are automatically excluded.
+6. Associate master data is global; target, capacity, and run-specific settings are copied into the Run Snapshot.
+7. Duplicate Product IDs require manual resolution before sampling.
+
+## Sampling
+
+8. Sample only from validated, user-approved eligible population.
+9. Freeze and record eligible population for the Run.
+10. Percentage sampling uses explicit HALF-UP rounding to nearest integer.
+11. Store requested percentage, pre-round calculated count, and actual count.
+
+## Product ID
+
+12. Treat Product ID as string internally.
+13. Trim leading/trailing whitespace.
+14. Preserve leading zeros.
+15. Preserve original and normalized Product ID.
+16. Do not silently convert scientific notation.
+17. MX PT matching is case-sensitive unless configured otherwise.
+18. If normalization produces duplicates, create a duplicate-ID exception; do not auto-keep, merge, or sample affected records before manual resolution.
+
+## Consolidation
+
+19. Associate identity in filename, metadata sheet, and data columns.
+20. Filename: `{PROGRAM}_{ASSOCIATE_ID}_{ASSOCIATE_NAME}_{RUN_ID}.xlsx`; Associate ID is authoritative and Associate Name is sanitized display text.
+21. Metadata: Run ID, Program, Associate ID, Associate Name, Generation timestamp.
+22. Data columns: Run ID, Allocated To.
+23. Cross-check all available identity information.
+24. Open critical exceptions block final consolidated export by default.
+25. User may override with open exceptions only with user, timestamp, reason, and reconciliation version audited.
+26. Wrong-associate rows are quarantined for manual resolution; conflicting response values also require manual resolution.
+
+## QC
+
+27. QC supports item-level, associate-level, and run-level metrics.
+28. MX PT QC: Pass Count / Audited Count × 100; error rate: Fail Count / Audited Count × 100.
+29. If Audited Count = 0, QC score and error rate are N/A.
+30. QC rules use restricted declarative configuration.
+31. No `eval()`, `exec()`, arbitrary Python expressions, or unrestricted formulas.
+
+## Errors
+
+32. Support imported and generated errors.
+33. Error taxonomy is configurable by program.
+34. Error rules are frozen in the Run Snapshot.
+
+## Historical
+
+35. Historical comparison uses previous completed Run for same Program; a Completed Run has finalized consolidation, resolved/overridden critical exceptions, and completed QC.
+36. If none exists, historical comparison is N/A.
+
+## Audit
+
+37. Audit captures OS username and application display name.
+38. Run ID format: `{PROGRAM}-{YYYYMMDD}-{SEQUENCE}`.
+39. Sequence resets daily.
+40. Run IDs are unique and never reused.
+
+## Validation
+
+41. Severity levels: Critical, Warning, Information.
+42. Critical failures block processing.
+43. Warnings require user acknowledgement where appropriate.
+44. Information messages do not block processing.
+
+## Input
+
+45. V1 supports XLSX and CSV.
+46. XLS is deferred.
+47. V1 performance target: approximately 100,000 rows per input file.
+
+## Outlook
+
+48. V1 due date is entered by the user.
+49. Email template tokens: `{{associate_name}}`, `{{program_name}}`, `{{run_id}}`, `{{item_count}}`, `{{due_date}}`.
+50. Outlook creates drafts only; never automatically send messages.
+
+## Windows
+
+51. Packaged application data uses a user-writable Windows local application data directory.
+52. Do not store mutable production data inside the EXE installation directory.
+
+## Run Setup, Allocation, and Evidence
+
+53. Snapshot freezing occurs only after user-confirmed Draft/Setup configuration.
+54. Sampling records membership, canonical ordering/fingerprint, RNG algorithm/version, and sampling algorithm/version.
+55. If sample count exceeds target but not maximum capacity, require confirmation and use v1 proportional remaining-capacity overflow with Associate ID tie-breaking.
+56. Source, generated/system, and associate-response fields must remain distinct; source evidence must never be overwritten.
+57. Immutable Run evidence and execution-manifest requirements in Section 21 are mandatory.
+58. Enforce the Run State Machine in Section 21.
