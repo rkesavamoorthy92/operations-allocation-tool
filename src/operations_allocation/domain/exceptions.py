@@ -103,3 +103,8 @@ class OutlookUnavailableError(OperationsAllocationError):
 class AssociateFileNotDistributedError(OperationsAllocationError):
     """Raised when an individual email draft is requested for an associate
     whose work file has not been generated yet (Distribution required first)."""
+
+
+class EmailTemplateError(OperationsAllocationError):
+    """Raised when an email template references an unsupported placeholder
+    or a required token value is missing."""

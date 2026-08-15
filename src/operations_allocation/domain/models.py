@@ -41,6 +41,7 @@ class ArtifactType(StrEnum):
     QC = "qc"
     ERRORS = "errors"
     REPORTS = "reports"
+    EMAIL_DRAFTS = "email_drafts"
 
 
 @dataclass(frozen=True, slots=True)
