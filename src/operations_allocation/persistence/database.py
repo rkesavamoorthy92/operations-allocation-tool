@@ -15,7 +15,7 @@ from pathlib import Path
 
 from operations_allocation.domain.exceptions import PersistenceError
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class Database:
@@ -185,6 +185,18 @@ class Database:
             assignments_json TEXT NOT NULL,
             allocated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS artifacts (
+            artifact_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL REFERENCES runs(run_id),
+            artifact_type TEXT NOT NULL,
+            relative_path TEXT NOT NULL,
+            original_filename TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+            created_at TEXT NOT NULL,
+            associate_id TEXT,
+            UNIQUE (run_id, relative_path)
+        );
         CREATE TABLE IF NOT EXISTS schema_metadata (
             schema_name TEXT PRIMARY KEY,
             schema_version INTEGER NOT NULL CHECK (schema_version >= 1)
@@ -219,6 +231,12 @@ class Database:
         CREATE TRIGGER IF NOT EXISTS prevent_allocation_result_delete
         BEFORE DELETE ON allocation_results
         BEGIN SELECT RAISE(ABORT, 'Allocation results are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS prevent_artifact_update
+        BEFORE UPDATE ON artifacts
+        BEGIN SELECT RAISE(ABORT, 'Artifact records are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS prevent_artifact_delete
+        BEFORE DELETE ON artifacts
+        BEGIN SELECT RAISE(ABORT, 'Artifact records are append-only'); END;
         """
         try:
             with self.transaction() as connection:

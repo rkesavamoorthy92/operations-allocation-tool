@@ -63,3 +63,15 @@ class InsufficientCapacityError(OperationsAllocationError):
 
 class AboveTargetConfirmationRequiredError(OperationsAllocationError):
     """Raised when finalizing allocation above target without explicit confirmation."""
+
+
+class ArtifactAlreadyExistsError(OperationsAllocationError):
+    """Raised when writing an artifact would silently overwrite an existing file."""
+
+
+class InvalidArtifactFilenameError(OperationsAllocationError):
+    """Raised when an artifact filename is unsafe (e.g. attempts path traversal)."""
+
+
+class ArtifactSourceNotFoundError(OperationsAllocationError):
+    """Raised when an imported artifact's source file cannot be found."""

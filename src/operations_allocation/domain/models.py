@@ -29,6 +29,20 @@ class RunState(StrEnum):
     ABANDONED = "ABANDONED"
 
 
+class ArtifactType(StrEnum):
+    """Matches the Run output directory tree in ARCHITECTURE.md section 4.6."""
+
+    SOURCE = "source"
+    SAMPLES = "samples"
+    ALLOCATION = "allocation"
+    ASSOCIATE_FILES = "associate_files"
+    RETURNED_FILES = "returned_files"
+    CONSOLIDATED = "consolidated"
+    QC = "qc"
+    ERRORS = "errors"
+    REPORTS = "reports"
+
+
 @dataclass(frozen=True, slots=True)
 class Program:
     program_id: str
@@ -218,3 +232,19 @@ class AllocationResult:
     confirmed_by: str | None
     assignments: tuple[AllocationAssignment, ...]
     allocated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class Artifact:
+    """A file generated or imported for a Run (ARCHITECTURE.md section 4.6 /
+    section 7.1). ``relative_path`` is relative to the Run's output
+    directory so records remain valid across machines/environments."""
+
+    run_id: str
+    artifact_type: ArtifactType
+    relative_path: str
+    original_filename: str
+    sha256: str
+    byte_size: int
+    created_at: datetime
+    associate_id: str | None = None

@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from operations_allocation.domain.exceptions import DuplicateRunIdError, InvalidRunStateError, ManifestIntegrityError, PersistenceError
-from operations_allocation.domain.models import Associate, AllocationAssignment, AllocationResult, DuplicateResolution, EligiblePopulation, ExecutionManifest, Program, Run, RunConfigurationSnapshot, RunState, SamplingResult
+from operations_allocation.domain.models import Associate, AllocationAssignment, AllocationResult, Artifact, ArtifactType, DuplicateResolution, EligiblePopulation, ExecutionManifest, Program, Run, RunConfigurationSnapshot, RunState, SamplingResult
 from operations_allocation.domain.state_machine import ensure_transition
 from operations_allocation.utils.canonical import deep_thaw
 
@@ -395,6 +395,45 @@ class AllocationResultRepository:
                 assignments=assignments,
                 allocated_at=datetime.fromisoformat(row["allocated_at"]),
             )
+
+
+class ArtifactRepository:
+    def __init__(self, database: Any) -> None:
+        self.database = database
+
+    def add(self, artifact: Artifact, connection: sqlite3.Connection | None = None) -> None:
+        with _write_scope(self.database, connection) as conn:
+            conn.execute(
+                "INSERT INTO artifacts (run_id, artifact_type, relative_path, original_filename, sha256, byte_size, created_at, associate_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    artifact.run_id,
+                    artifact.artifact_type.value,
+                    artifact.relative_path,
+                    artifact.original_filename,
+                    artifact.sha256,
+                    artifact.byte_size,
+                    artifact.created_at.isoformat(),
+                    artifact.associate_id,
+                ),
+            )
+
+    def list_for_run(self, run_id: str) -> tuple[Artifact, ...]:
+        with _read_scope(self.database) as conn:
+            rows = conn.execute("SELECT * FROM artifacts WHERE run_id = ? ORDER BY artifact_id", (run_id,)).fetchall()
+            return tuple(_artifact(row) for row in rows)
+
+
+def _artifact(row: sqlite3.Row) -> Artifact:
+    return Artifact(
+        run_id=row["run_id"],
+        artifact_type=ArtifactType(row["artifact_type"]),
+        relative_path=row["relative_path"],
+        original_filename=row["original_filename"],
+        sha256=row["sha256"],
+        byte_size=row["byte_size"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        associate_id=row["associate_id"],
+    )
 
 
 def _run_date_and_sequence(run_id: str) -> tuple[str, int]:
