@@ -92,3 +92,14 @@ class ColumnMappingError(OperationsAllocationError):
 
 class AssignedItemNotFoundError(OperationsAllocationError):
     """Raised when an allocated identifier has no matching canonical source row."""
+
+
+class OutlookUnavailableError(OperationsAllocationError):
+    """Raised when Outlook/COM automation cannot be reached. Callers must
+    keep the workflow usable and fall back to the persisted plain-text
+    draft artifact rather than treating this as fatal."""
+
+
+class AssociateFileNotDistributedError(OperationsAllocationError):
+    """Raised when an individual email draft is requested for an associate
+    whose work file has not been generated yet (Distribution required first)."""

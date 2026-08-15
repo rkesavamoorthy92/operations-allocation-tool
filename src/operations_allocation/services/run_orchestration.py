@@ -60,6 +60,9 @@ def _validate_snapshot_associates(associates: list[dict[str, Any]]) -> None:
         name = associate.get("name")
         if not isinstance(name, str) or not name.strip():
             raise InvalidAssociateConfigurationError(f"Associate '{identifier}' requires a non-empty name.")
+        email = associate.get("email")
+        if not isinstance(email, str) or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            raise InvalidAssociateConfigurationError(f"Associate '{identifier}' requires a valid email address.")
         for field in ("target", "maximum_capacity"):
             value = associate.get(field)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:

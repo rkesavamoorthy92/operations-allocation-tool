@@ -61,8 +61,8 @@ class AllocationServiceTestCase(unittest.TestCase):
 
     def test_finalize_advances_state_and_persists_result(self) -> None:
         associates = [
-            {"associate_id": "A", "name": "Alice", "active": True, "target": 10, "maximum_capacity": 10},
-            {"associate_id": "B", "name": "Bob", "active": True, "target": 10, "maximum_capacity": 10},
+            {"associate_id": "A", "name": "Alice", "email": "alice@example.test", "active": True, "target": 10, "maximum_capacity": 10},
+            {"associate_id": "B", "name": "Bob", "email": "bob@example.test", "active": True, "target": 10, "maximum_capacity": 10},
         ]
         run_id = self._run_through_sampled(associates=associates, sample_count=15)
         result = self.allocation_service.finalize(run_id=run_id)
@@ -74,14 +74,14 @@ class AllocationServiceTestCase(unittest.TestCase):
         self.assertIn("RUN_ALLOCATED", actions)
 
     def test_finalize_blocked_by_insufficient_capacity(self) -> None:
-        associates = [{"associate_id": "A", "name": "Alice", "active": True, "target": 5, "maximum_capacity": 5}]
+        associates = [{"associate_id": "A", "name": "Alice", "email": "alice@example.test", "active": True, "target": 5, "maximum_capacity": 5}]
         run_id = self._run_through_sampled(associates=associates, sample_count=10)
         with self.assertRaises(InsufficientCapacityError):
             self.allocation_service.finalize(run_id=run_id)
         self.assertEqual(self.runs.get(run_id).state, RunState.SAMPLED)
 
     def test_finalize_requires_confirmation_above_target(self) -> None:
-        associates = [{"associate_id": "A", "name": "Alice", "active": True, "target": 5, "maximum_capacity": 20}]
+        associates = [{"associate_id": "A", "name": "Alice", "email": "alice@example.test", "active": True, "target": 5, "maximum_capacity": 20}]
         run_id = self._run_through_sampled(associates=associates, sample_count=10)
         with self.assertRaises(AboveTargetConfirmationRequiredError):
             self.allocation_service.finalize(run_id=run_id)
@@ -96,7 +96,7 @@ class AllocationServiceTestCase(unittest.TestCase):
             self.allocation_service.finalize(run_id=run.run_id)
 
     def test_preview_does_not_change_state_or_persist(self) -> None:
-        associates = [{"associate_id": "A", "name": "Alice", "active": True, "target": 10, "maximum_capacity": 10}]
+        associates = [{"associate_id": "A", "name": "Alice", "email": "alice@example.test", "active": True, "target": 10, "maximum_capacity": 10}]
         run_id = self._run_through_sampled(associates=associates, sample_count=8)
         plan = self.allocation_service.preview(run_id=run_id)
         self.assertFalse(plan.blocked)
@@ -105,7 +105,7 @@ class AllocationServiceTestCase(unittest.TestCase):
             self.allocation_results.get(run_id)
 
     def test_allocation_result_table_is_append_only(self) -> None:
-        associates = [{"associate_id": "A", "name": "Alice", "active": True, "target": 10, "maximum_capacity": 10}]
+        associates = [{"associate_id": "A", "name": "Alice", "email": "alice@example.test", "active": True, "target": 10, "maximum_capacity": 10}]
         run_id = self._run_through_sampled(associates=associates, sample_count=8)
         self.allocation_service.finalize(run_id=run_id)
         with self.assertRaises(PersistenceError):
@@ -117,8 +117,8 @@ class AllocationServiceTestCase(unittest.TestCase):
 
     def test_inactive_associates_excluded_end_to_end(self) -> None:
         associates = [
-            {"associate_id": "A", "name": "Alice", "active": True, "target": 10, "maximum_capacity": 10},
-            {"associate_id": "B", "name": "Bob", "active": False, "target": 100, "maximum_capacity": 100},
+            {"associate_id": "A", "name": "Alice", "email": "alice@example.test", "active": True, "target": 10, "maximum_capacity": 10},
+            {"associate_id": "B", "name": "Bob", "email": "bob@example.test", "active": False, "target": 100, "maximum_capacity": 100},
         ]
         run_id = self._run_through_sampled(associates=associates, sample_count=8)
         result = self.allocation_service.finalize(run_id=run_id)

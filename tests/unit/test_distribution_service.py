@@ -100,8 +100,8 @@ class DistributionServiceTestCase(unittest.TestCase):
 
     def test_distribute_writes_one_workbook_per_associate_with_planned_items(self) -> None:
         associates = [
-            {"associate_id": "A001", "name": "Jane Doe", "active": True, "target": 10, "maximum_capacity": 10},
-            {"associate_id": "A002", "name": "John Smith", "active": True, "target": 10, "maximum_capacity": 10},
+            {"associate_id": "A001", "name": "Jane Doe", "email": "jane.doe@example.test", "active": True, "target": 10, "maximum_capacity": 10},
+            {"associate_id": "A002", "name": "John Smith", "email": "john.smith@example.test", "active": True, "target": 10, "maximum_capacity": 10},
         ]
         run_id = self._run_to_allocated(associates=associates, sample_count=20)
         artifacts = self.distribution_service.distribute(run_id=run_id)
@@ -111,7 +111,7 @@ class DistributionServiceTestCase(unittest.TestCase):
         self.assertEqual(filenames, {f"MX-PT_A001_Jane_Doe_{run_id}.xlsx", f"MX-PT_A002_John_Smith_{run_id}.xlsx"})
 
     def test_workbook_contents_are_a_real_readable_xlsx(self) -> None:
-        associates = [{"associate_id": "A001", "name": "Jane Doe", "active": True, "target": 5, "maximum_capacity": 5}]
+        associates = [{"associate_id": "A001", "name": "Jane Doe", "email": "jane.doe@example.test", "active": True, "target": 5, "maximum_capacity": 5}]
         run_id = self._run_to_allocated(associates=associates, sample_count=5)
         artifacts = self.distribution_service.distribute(run_id=run_id)
         workbook = load_workbook(self.file_artifacts.run_directory(run_id) / artifacts[0].relative_path)
@@ -128,8 +128,8 @@ class DistributionServiceTestCase(unittest.TestCase):
 
     def test_associate_with_zero_planned_count_gets_no_file(self) -> None:
         associates = [
-            {"associate_id": "A001", "name": "Jane Doe", "active": True, "target": 5, "maximum_capacity": 5},
-            {"associate_id": "A002", "name": "Idle Associate", "active": False, "target": 100, "maximum_capacity": 100},
+            {"associate_id": "A001", "name": "Jane Doe", "email": "jane.doe@example.test", "active": True, "target": 5, "maximum_capacity": 5},
+            {"associate_id": "A002", "name": "Idle Associate", "email": "idle@example.test", "active": False, "target": 100, "maximum_capacity": 100},
         ]
         run_id = self._run_to_allocated(associates=associates, sample_count=5)
         artifacts = self.distribution_service.distribute(run_id=run_id)
@@ -142,7 +142,7 @@ class DistributionServiceTestCase(unittest.TestCase):
             self.distribution_service.distribute(run_id=run.run_id)
 
     def test_records_audit_event(self) -> None:
-        associates = [{"associate_id": "A001", "name": "Jane Doe", "active": True, "target": 5, "maximum_capacity": 5}]
+        associates = [{"associate_id": "A001", "name": "Jane Doe", "email": "jane.doe@example.test", "active": True, "target": 5, "maximum_capacity": 5}]
         run_id = self._run_to_allocated(associates=associates, sample_count=5)
         self.distribution_service.distribute(run_id=run_id)
         actions = [event["action"] for event in self.audit_repository.for_run(run_id)]
