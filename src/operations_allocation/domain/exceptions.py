@@ -80,3 +80,11 @@ class ArtifactSourceNotFoundError(OperationsAllocationError):
 class InvalidQcRuleError(OperationsAllocationError):
     """Raised when a QC rule configuration is structurally invalid or of an
     unsupported/forbidden type."""
+
+
+class UnsupportedFileFormatError(OperationsAllocationError):
+    """Raised when an input file's format is not supported in v1 (e.g. .xls)."""
+
+
+class ColumnMappingError(OperationsAllocationError):
+    """Raised when a required source column cannot be found in an imported file."""
