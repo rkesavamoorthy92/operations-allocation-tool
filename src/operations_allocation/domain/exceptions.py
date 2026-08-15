@@ -124,3 +124,11 @@ class InvalidQcResultError(OperationsAllocationError):
     """Raised when an imported QC report row has an unrecognized audit
     outcome value or references an identifier outside the Run's
     consolidated items."""
+
+
+class InvalidErrorRuleError(OperationsAllocationError):
+    """Raised when an error classification rule is structurally invalid."""
+
+
+class InvalidErrorRecordError(OperationsAllocationError):
+    """Raised when an imported error report row is missing its required identifier."""

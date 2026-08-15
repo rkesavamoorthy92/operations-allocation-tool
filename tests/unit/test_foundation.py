@@ -134,6 +134,21 @@ class FoundationTestCase(unittest.TestCase):
         self.assertEqual([event["action"] for event in events], ["RUN_CREATED", "RUN_STATE_CHANGED"])
         self.assertEqual(events[1]["previous_state"], "DRAFT")
 
+    def test_qc_completed_can_transition_to_completed(self) -> None:
+        """Regression test: PROJECT_SPEC.md section 26 defines COMPLETED as
+        requiring Consolidation finalized (with critical exceptions
+        resolved or explicitly overridden) AND QC processing completed.
+        Because the Run state machine is strictly linear, reaching
+        QC_COMPLETED already implies both conditions were satisfied --
+        Consolidation's own override gate (services.consolidation) is
+        what enforces the exception-resolution half of this rule. This
+        test locks in that QC_COMPLETED -> COMPLETED remains a plain,
+        unconditional transition and is never accidentally re-gated."""
+        run = self.service.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
+        for target in (RunState.SNAPSHOT_FROZEN, RunState.VALIDATED, RunState.ELIGIBLE_POPULATION_FROZEN, RunState.SAMPLED, RunState.ALLOCATED, RunState.DISTRIBUTED, RunState.RETURNED, RunState.CONSOLIDATED, RunState.QC_COMPLETED, RunState.COMPLETED):
+            updated = self.service.transition(run.run_id, target)
+        self.assertEqual(updated.state, RunState.COMPLETED)
+
     def test_snapshot_is_immutable_and_retains_original_configuration(self) -> None:
         run = self.service.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
         configuration = valid_config()

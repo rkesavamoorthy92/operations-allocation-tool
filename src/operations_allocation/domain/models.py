@@ -249,3 +249,27 @@ class Artifact:
     byte_size: int
     created_at: datetime
     associate_id: str | None = None
+
+
+class ErrorSource(StrEnum):
+    """PROJECT_SPEC.md section 24: error reporting must support both
+    imported (from an external report) and generated (detected by the
+    application itself, e.g. from Consolidation exceptions) errors."""
+
+    IMPORTED = "imported"
+    GENERATED = "generated"
+
+
+@dataclass(frozen=True, slots=True)
+class ErrorRecord:
+    """One classified error for a Run. Category/type/severity vocabulary
+    is entirely program-defined (never hard-coded) -- see core.errors."""
+
+    run_id: str
+    identifier: str
+    associate_id: str | None
+    category: str
+    error_type: str
+    severity: str
+    source: ErrorSource
+    fields: Mapping[str, str | None]
