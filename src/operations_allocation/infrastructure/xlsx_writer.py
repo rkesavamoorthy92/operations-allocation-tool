@@ -28,3 +28,20 @@ def write_associate_workbook(*, metadata: Mapping[str, str], headers: Sequence[s
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
+
+
+def write_multi_sheet_workbook(sheets: Mapping[str, tuple[Sequence[str], Sequence[Sequence[object]]]]) -> bytes:
+    """Write a workbook with one sheet per (headers, rows) entry in
+    ``sheets``, in insertion order. Used by Consolidation to produce a
+    Consolidated + Quarantined workbook without duplicating the openpyxl
+    plumbing in write_associate_workbook."""
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for sheet_name, (headers, rows) in sheets.items():
+        sheet = workbook.create_sheet(sheet_name)
+        sheet.append(list(headers))
+        for row in rows:
+            sheet.append(list(row))
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()

@@ -108,3 +108,13 @@ class AssociateFileNotDistributedError(OperationsAllocationError):
 class EmailTemplateError(OperationsAllocationError):
     """Raised when an email template references an unsupported placeholder
     or a required token value is missing."""
+
+
+class ConsolidationBlockedByExceptionsError(OperationsAllocationError):
+    """Raised when finalizing Consolidation with open critical exceptions
+    and no explicit override."""
+
+
+class InvalidOverrideError(OperationsAllocationError):
+    """Raised when a Consolidation exception override is missing required
+    accountability fields (user, reason)."""

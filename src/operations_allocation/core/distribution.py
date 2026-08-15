@@ -53,12 +53,21 @@ def build_filename(pattern: str, *, program_id: str, run_id: str, associate_id: 
 
 def _field_header(field: Mapping[str, object]) -> str:
     name = str(field["name"])
+def field_header(field: Mapping[str, object]) -> str:
+    """The exact column header used for a field in an associate work file.
+    Exposed publicly so Consolidation can map headers on returned files
+    back to canonical field names without duplicating this logic."""
+    name = str(field["name"])
     if name in _HEADER_OVERRIDES:
         return _HEADER_OVERRIDES[name]
     source_column = field.get("source_column")
     if isinstance(source_column, str) and source_column.strip():
         return source_column
     return name.replace("_", " ").title()
+
+
+def _field_header(field: Mapping[str, object]) -> str:
+    return field_header(field)
 
 
 def _field_value(field: Mapping[str, object], *, canonical_row: Mapping[str, str | None], associate_id: str, run_id: str) -> str | None:
