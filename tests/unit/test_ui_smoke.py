@@ -7,6 +7,7 @@ input, so dialogs are instead constructed directly and inspected.
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import date
@@ -23,6 +24,7 @@ from operations_allocation.ui.duplicate_resolution_view import DuplicateResoluti
 from operations_allocation.ui.dashboard_view import DashboardView
 from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.main_window import MainWindow
+from operations_allocation.ui.program_configuration_view import ProgramConfigurationDialog, starter_template
 from operations_allocation.ui.run_detail_view import RunDetailView
 from operations_allocation.ui import run_actions
 from operations_allocation.ui.setup_dialogs import FreezeSetupDialog, NewProgramDialog, NewRunDialog
@@ -49,6 +51,12 @@ class UiSmokeTestCase(unittest.TestCase):
         self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
         dashboard = DashboardView(self.context, on_open_run=lambda run_id: None)
         self.assertEqual(dashboard.runs_table.rowCount(), 1)
+
+    def test_dashboard_lists_programs_with_active_version(self) -> None:
+        dashboard = DashboardView(self.context, on_open_run=lambda run_id: None)
+        self.assertEqual(dashboard.programs_table.rowCount(), 1)
+        self.assertEqual(dashboard.programs_table.item(0, 0).text(), "MX-PT")
+        self.assertEqual(dashboard.programs_table.item(0, 2).text(), "1")
 
     def test_open_run_navigates_to_detail_view(self) -> None:
         run = self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
@@ -134,3 +142,23 @@ class UiSmokeTestCase(unittest.TestCase):
         dialog._on_accept()
         self.assertEqual(dialog.resolutions[0].action, "KEEP_ROW")
         self.assertEqual(dialog.resolutions[0].kept_row_index, 0)
+
+    def test_program_configuration_dialog_edits_next_version_of_existing_program(self) -> None:
+        dialog = ProgramConfigurationDialog(self.context, "MX-PT")
+        self.assertIn('"version": 2', dialog.editor.toPlainText())
+        dialog._on_validate()
+        self.assertEqual(dialog.status_label.text(), "Valid.")
+        dialog._on_save()
+        self.assertTrue(dialog.saved)
+        self.assertEqual(self.context.programs.get("MX-PT").active_configuration_version, 2)
+
+    def test_program_configuration_dialog_starter_template_for_new_program(self) -> None:
+        self.context.program_configuration.create_program("MX-QC", "MX QC")
+        dialog = ProgramConfigurationDialog(self.context, "MX-QC")
+        self.assertEqual(json.loads(dialog.editor.toPlainText()), starter_template("MX-QC", "MX QC"))
+
+    def test_program_configuration_dialog_shows_error_for_invalid_json(self) -> None:
+        dialog = ProgramConfigurationDialog(self.context, "MX-PT")
+        dialog.editor.setPlainText("{not valid json")
+        dialog._on_validate()
+        self.assertIn("Invalid JSON", dialog.status_label.text())
