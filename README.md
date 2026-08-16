@@ -10,6 +10,9 @@ connection required to run -- everything lives in a local database on
 the machine it runs on (see `packaging/PACKAGING.md` for how that scales
 to a shared/team setup later).
 
+**Using the app?** See `USER_GUIDE.md`. **Supporting/troubleshooting
+it?** See `SUPPORT_GUIDE.md`.
+
 ## Running from source
 
 ```powershell
