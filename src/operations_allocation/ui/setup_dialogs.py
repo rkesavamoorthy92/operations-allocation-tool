@@ -6,6 +6,7 @@ services -- no business rules live here (ARCHITECTURE.md section 9).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QDate
@@ -14,8 +15,10 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QHeaderView,
+    QHBoxLayout,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -26,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from operations_allocation.core.randomizer import generate_random_seed
+from operations_allocation.ui import run_actions
 
 
 class NewProgramDialog(QDialog):
@@ -131,6 +135,16 @@ class FreezeSetupDialog(QDialog):
         add_row_button.clicked.connect(self._add_associate_row)
         remove_row_button = QPushButton("- Remove Selected")
         remove_row_button.clicked.connect(self._remove_selected_row)
+        load_previous_button = QPushButton("Load from Previous Run")
+        load_previous_button.clicked.connect(self._load_from_previous_run)
+        import_file_button = QPushButton("Import from File...")
+        import_file_button.clicked.connect(self._import_from_file)
+
+        row_buttons = QHBoxLayout()
+        row_buttons.addWidget(add_row_button)
+        row_buttons.addWidget(remove_row_button)
+        row_buttons.addWidget(load_previous_button)
+        row_buttons.addWidget(import_file_button)
 
         form = QFormLayout()
         form.addRow("Sampling Method", self.sampling_method_combo)
@@ -145,8 +159,7 @@ class FreezeSetupDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.associates_table)
-        layout.addWidget(add_row_button)
-        layout.addWidget(remove_row_button)
+        layout.addLayout(row_buttons)
         layout.addWidget(buttons)
         self._add_associate_row()
 
@@ -160,6 +173,61 @@ class FreezeSetupDialog(QDialog):
         row = self.associates_table.currentRow()
         if row >= 0:
             self.associates_table.removeRow(row)
+
+    def _load_from_previous_run(self) -> None:
+        associates = run_actions.previous_run_associates(self.context, program_id=self.program_id, exclude_run_id=self.run_id)
+        if not associates:
+            QMessageBox.information(self, "No previous roster found", "No prior Run for this Program has a frozen associate roster yet.")
+            return
+        if not self._confirm_replace_roster():
+            return
+        self._populate_associates(associates)
+
+    def _import_from_file(self) -> None:
+        path, _filter = QFileDialog.getOpenFileName(self, "Select Associate Roster file", "", "Excel/CSV Files (*.xlsx *.csv)")
+        if not path:
+            return
+        try:
+            associates = run_actions.import_associate_roster(file_path=Path(path))
+        except Exception as error:
+            QMessageBox.critical(self, "Could not import Associate Roster", str(error))
+            return
+        if not associates:
+            QMessageBox.information(self, "No associates found", "That file did not contain any associate rows.")
+            return
+        if not self._confirm_replace_roster():
+            return
+        self._populate_associates(associates)
+
+    def _confirm_replace_roster(self) -> bool:
+        """Only prompt if the table already has associate rows worth
+        losing -- a brand-new dialog's single blank starter row shouldn't
+        require a confirmation click."""
+        if not any(self._collect_associates()):
+            return True
+        choice = QMessageBox.question(
+            self, "Replace current roster?",
+            "This will replace the associates currently in the table. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        return choice == QMessageBox.StandardButton.Yes
+
+    def _populate_associates(self, associates: list[dict]) -> None:
+        self.associates_table.setRowCount(0)
+        for associate in associates:
+            row = self.associates_table.rowCount()
+            self.associates_table.insertRow(row)
+            values = (
+                associate.get("associate_id", ""),
+                associate.get("name", ""),
+                associate.get("email", ""),
+                str(associate.get("target", 0)),
+                str(associate.get("maximum_capacity", 0)),
+            )
+            for column, value in enumerate(values):
+                self.associates_table.setItem(row, column, QTableWidgetItem(value))
+        if self.associates_table.rowCount() == 0:
+            self._add_associate_row()
 
     def _collect_associates(self) -> list[dict]:
         associates = []

@@ -10,7 +10,37 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from operations_allocation.core.associate_roster_import import parse_associate_roster
+from operations_allocation.domain.exceptions import PersistenceError
 from operations_allocation.domain.models import RunState
+from operations_allocation.infrastructure.tabular_import import read_raw_table
+from operations_allocation.utils.canonical import deep_thaw
+
+
+def previous_run_associates(context: Any, *, program_id: str, exclude_run_id: str | None = None) -> list[dict] | None:
+    """Best-effort lookup of the associate roster frozen on the most
+    recent prior Run of this Program, so Freeze Setup can start from a
+    known-good roster instead of blank. Never freezes or writes anything
+    itself -- the caller still confirms/edits before freezing. Returns
+    None if no prior Run of this Program has a snapshot yet."""
+    for run in context.runs.list_all(include_archived=True):
+        if run.program_id != program_id or run.run_id == exclude_run_id:
+            continue
+        try:
+            snapshot = context.snapshots.get(run.run_id)
+        except PersistenceError:
+            continue
+        associates = deep_thaw(snapshot.configuration.get("associates"))
+        if associates:
+            return associates
+    return None
+
+
+def import_associate_roster(*, file_path: Path | str) -> list[dict]:
+    """Bulk-parse an Associate Roster .xlsx/.csv (Associate ID, Name,
+    Email, Target, Max Capacity columns) into the dicts Freeze Setup
+    needs. Pure file-read + parse -- no AppContext/persistence involved."""
+    return parse_associate_roster(read_raw_table(file_path))
 
 
 def import_source_and_validate(context: Any, *, run_id: str, file_path: Path | str) -> tuple[list[dict], Any]:

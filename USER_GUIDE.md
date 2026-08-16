@@ -92,10 +92,27 @@ buttons outside your current step are grayed out.
   blank and one is generated for you — this matters for reproducing
   exactly which items get picked), a Due Date (shown to associates in
   their email), and the associate roster (Associate ID, Name, Email,
-  Target, Max Capacity — use **+ Add Associate**/**- Remove Selected**
-  to edit rows). Confirming this **freezes** the Run's setup
-  permanently — the configuration snapshot behind it can't be
-  silently changed afterward.
+  Target, Max Capacity). You don't have to type the roster by hand
+  every time:
+  - **+ Add Associate** / **- Remove Selected** — edit rows one at a
+    time (the original, always-available option).
+  - **Load from Previous Run** — pre-fills the table from the most
+    recent prior Run of the *same Program* that reached Freeze Setup,
+    so a mostly-unchanged team roster is a couple of tweaks instead of
+    a full re-type. Shows a message if this Program has no prior
+    frozen Run yet.
+  - **Import from File…** — pick an `.xlsx`/`.csv` with columns
+    Associate ID, Name, Email, Target, Max Capacity (column order
+    doesn't matter, and a few header spellings like "ID"/"Associate
+    Name"/"Max Capacity"/"Maximum Capacity" are all recognized) and it
+    fills the whole table in one shot.
+
+  Both bulk options ask for confirmation before replacing rows you've
+  already entered, and either way you can still edit/add/remove rows
+  by hand afterward before confirming — nothing is frozen until you
+  click OK. Confirming **freezes** the Run's setup permanently — the
+  configuration snapshot behind it can't be silently changed
+  afterward.
 - **Cancel Run** — only available before Setup is frozen.
 
 ### 2. Import & Sample

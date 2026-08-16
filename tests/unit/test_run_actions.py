@@ -87,3 +87,36 @@ class RunActionsTestCase(unittest.TestCase):
 
         completed = run_actions.complete_run(self.context, run_id=run.run_id)
         self.assertEqual(completed.state, RunState.COMPLETED)
+
+    def test_previous_run_associates_returns_none_when_no_prior_snapshot(self) -> None:
+        self.assertIsNone(run_actions.previous_run_associates(self.context, program_id="MX-PT"))
+
+    def test_previous_run_associates_returns_most_recent_prior_roster(self) -> None:
+        associates = [{"associate_id": "A001", "name": "Jane Doe", "email": "jane.doe@example.test", "active": True, "target": 10, "maximum_capacity": 10}]
+        first_run = self.context.orchestration.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 15))
+        self.context.orchestration.freeze_setup(run_id=first_run.run_id, program_configuration=qc_config(), sampling={"method": "count", "value": 10}, random_seed="seed", associates=associates)
+
+        second_run = self.context.orchestration.create_run(program_id="MX-PT", created_by="user", created_on=date(2026, 8, 16))
+        found = run_actions.previous_run_associates(self.context, program_id="MX-PT", exclude_run_id=second_run.run_id)
+        self.assertEqual(found, associates)
+
+    def test_previous_run_associates_ignores_other_programs(self) -> None:
+        other_config = dict(qc_config())
+        other_config["program_id"] = "OTHER"
+        self.context.program_configuration.create_program("OTHER", "Other Program")
+        self.context.program_configuration.save_version(other_config)
+        associates = [{"associate_id": "A099", "name": "Nope", "email": "nope@example.test", "active": True, "target": 5, "maximum_capacity": 5}]
+        other_run = self.context.orchestration.create_run(program_id="OTHER", created_by="user", created_on=date(2026, 8, 15))
+        self.context.orchestration.freeze_setup(run_id=other_run.run_id, program_configuration=other_config, sampling={"method": "count", "value": 5}, random_seed="seed", associates=associates)
+
+        self.assertIsNone(run_actions.previous_run_associates(self.context, program_id="MX-PT"))
+
+    def test_import_associate_roster_parses_csv(self) -> None:
+        path = Path(self.tempdir.name) / "roster.csv"
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["Associate ID", "Name", "Email", "Target", "Max Capacity"])
+            writer.writerow(["A001", "Jane Doe", "jane.doe@example.test", "10", "12"])
+
+        associates = run_actions.import_associate_roster(file_path=path)
+        self.assertEqual(associates, [{"associate_id": "A001", "name": "Jane Doe", "email": "jane.doe@example.test", "active": True, "target": 10, "maximum_capacity": 12}])
