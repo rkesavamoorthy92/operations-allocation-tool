@@ -16,6 +16,7 @@ rounding `round()`), matching the worked examples in the spec:
 from __future__ import annotations
 
 import random
+import secrets
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Sequence
@@ -26,6 +27,16 @@ RNG_ALGORITHM = "python-random-mt19937"
 RNG_ALGORITHM_VERSION = "1"
 SAMPLING_ALGORITHM = "sample-without-replacement"
 SAMPLING_ALGORITHM_VERSION = "1"
+
+
+def generate_random_seed() -> str:
+    """A fresh, high-entropy seed for when a Run's setup does not name an
+    explicit one. Called once, before the Run Configuration Snapshot is
+    frozen -- the seed itself is then immutable and reproducible for that
+    Run forever after, matching ARCHITECTURE.md section 4.5's requirement
+    that an "automatic seed" choice resolves to a concrete stored value
+    rather than being re-derived (and therefore silently changing) later."""
+    return secrets.token_hex(16)
 
 
 @dataclass(frozen=True, slots=True)

@@ -96,6 +96,20 @@ class UiSmokeTestCase(unittest.TestCase):
         dialog = FreezeSetupDialog(self.context, run.run_id, "MX-PT")
         self.assertEqual(dialog.associates_table.rowCount(), 1)  # Starts with one blank row to fill in.
 
+    def test_freeze_setup_dialog_generates_a_seed_when_left_blank(self) -> None:
+        # Regression test: the Random Seed field's placeholder promises
+        # "blank uses a generated seed", but the field used to be passed
+        # straight through as None -- freezing with a blank seed silently
+        # produced a Run with no seed at all, which then blew up with
+        # SamplingConfigurationError the moment 'Draw Sample' was clicked.
+        run = self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
+        dialog = FreezeSetupDialog(self.context, run.run_id, "MX-PT")
+        dialog._cell = lambda row, column: {0: "A001", 1: "Jane", 2: "jane@example.test", 3: "5", 4: "5"}.get(column, "")
+        self.assertEqual(dialog.random_seed_field.text(), "")
+        dialog._on_accept()
+        snapshot = self.context.snapshots.get(run.run_id)
+        self.assertTrue(snapshot.configuration["random_seed"])
+
     def test_consolidation_override_dialog_requires_reason(self) -> None:
         summary = {"missing_identifiers": ["P1"], "duplicate_count": 0, "unexpected_count": 0, "wrong_associate_count": 0, "identity_issue_count": 0}
         dialog = ConsolidationOverrideDialog(summary)

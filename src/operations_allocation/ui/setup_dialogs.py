@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from operations_allocation.core.randomizer import generate_random_seed
+
 
 class NewProgramDialog(QDialog):
     def __init__(self, context: Any, parent: QWidget | None = None) -> None:
@@ -175,11 +177,12 @@ class FreezeSetupDialog(QDialog):
     def _on_accept(self) -> None:
         try:
             sampling = {"method": self.sampling_method_combo.currentText(), "value": self.sampling_value_field.text().strip()}
+            random_seed = self.random_seed_field.text().strip() or generate_random_seed()
             self.context.orchestration.freeze_setup(
                 run_id=self.run_id,
                 program_configuration=self.program_configuration,
                 sampling=sampling,
-                random_seed=self.random_seed_field.text().strip() or None,
+                random_seed=random_seed,
                 associates=self._collect_associates(),
             )
         except Exception as error:

@@ -3,8 +3,16 @@ from __future__ import annotations
 import unittest
 from decimal import Decimal
 
-from operations_allocation.core.randomizer import calculate_sample_size, draw_sample, half_up_round
+from operations_allocation.core.randomizer import calculate_sample_size, draw_sample, generate_random_seed, half_up_round
 from operations_allocation.domain.exceptions import SamplingConfigurationError
+
+
+class GenerateRandomSeedTestCase(unittest.TestCase):
+    def test_returns_a_non_empty_string(self) -> None:
+        self.assertTrue(generate_random_seed())
+
+    def test_successive_calls_are_effectively_unique(self) -> None:
+        self.assertNotEqual(generate_random_seed(), generate_random_seed())
 
 
 class HalfUpRoundTestCase(unittest.TestCase):
