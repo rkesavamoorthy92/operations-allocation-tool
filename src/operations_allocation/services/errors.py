@@ -14,13 +14,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from operations_allocation.core.distribution import field_header
-from operations_allocation.core.errors import ErrorClassificationRule, classify, parse_classification_rule
+from operations_allocation.core.errors import ErrorClassificationRule, build_error_report_rows, classify, parse_classification_rule
 from operations_allocation.domain.exceptions import InvalidErrorRecordError, PersistenceError
 from operations_allocation.domain.models import ArtifactType, ErrorRecord, ErrorSource
 from operations_allocation.infrastructure.tabular_import import read_raw_table
+from operations_allocation.infrastructure.xlsx_writer import write_multi_sheet_workbook
 from operations_allocation.utils.identifiers import NormalizationPolicy, normalize_identifier
 
 _GENERATED_ERRORS_FILENAME = "generated_errors.json"
@@ -107,6 +108,28 @@ class ErrorService:
         self.audit.record(run_id=run_id, program_id=program_id, action="ERRORS_IMPORTED", metadata={"error_count": len(records), "artifact_sha256": artifact.sha256})
         return tuple(records)
 
+    def list_records(self, *, run_id: str) -> tuple[ErrorRecord, ...]:
+        """Read back every error record persisted for this Run so far
+        (both GENERATED and IMPORTED, if both were ever run), for display
+        or export. Returns an empty tuple if no errors have been
+        generated/imported yet -- that's a legitimate state, not an error."""
+        records: list[ErrorRecord] = []
+        for filename in (_GENERATED_ERRORS_FILENAME, _IMPORTED_ERRORS_FILENAME):
+            matching = [a for a in self.file_artifacts.list_for_run(run_id) if a.original_filename == filename]
+            if not matching:
+                continue
+            payload = json.loads(self.file_artifacts.read_bytes(matching[0]))
+            records.extend(_deserialize(item) for item in payload)
+        return tuple(records)
+
+    def export_report(self, *, run_id: str) -> bytes:
+        """Build a downloadable .xlsx of every error recorded for this Run
+        so far. Reuses the same multi-sheet writer Consolidation uses
+        (infrastructure.xlsx_writer) rather than a bespoke export path."""
+        records = self.list_records(run_id=run_id)
+        headers, rows = build_error_report_rows(records)
+        return write_multi_sheet_workbook({"Errors": (headers, rows)})
+
 
 def _load_rules(snapshot: Any) -> list[ErrorClassificationRule]:
     raw_rules = snapshot.configuration["program_configuration"]["errors"].get("classification_rules", [])
@@ -126,3 +149,11 @@ def _serialize(record: ErrorRecord) -> dict:
         "category": record.category, "type": record.error_type, "severity": record.severity,
         "source": record.source.value, "fields": dict(record.fields),
     }
+
+
+def _deserialize(payload: Mapping[str, Any]) -> ErrorRecord:
+    return ErrorRecord(
+        run_id=payload["run_id"], identifier=payload["identifier"], associate_id=payload["associate_id"],
+        category=payload["category"], error_type=payload["type"], severity=payload["severity"],
+        source=ErrorSource(payload["source"]), fields=dict(payload["fields"]),
+    )

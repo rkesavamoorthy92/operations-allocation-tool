@@ -73,6 +73,10 @@ def import_errors(context: Any, *, run_id: str, file_path: Path | str) -> tuple[
     return context.errors.import_errors(run_id=run_id, file_path=file_path)
 
 
+def export_error_report(context: Any, *, run_id: str) -> bytes:
+    return context.errors.export_report(run_id=run_id)
+
+
 def generate_insights(context: Any, *, run_id: str) -> Any:
     return context.insights.generate(run_id=run_id)
 

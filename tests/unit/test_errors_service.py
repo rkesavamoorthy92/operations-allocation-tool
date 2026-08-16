@@ -157,3 +157,51 @@ class ErrorServiceTestCase(unittest.TestCase):
             writer.writerow(["", "A001"])
         with self.assertRaises(InvalidErrorRecordError):
             self.error_service.import_errors(run_id=run_id, file_path=error_report)
+
+    def test_list_records_is_empty_before_any_errors_generated_or_imported(self) -> None:
+        run_id = self._run_with_exceptions()
+        self.assertEqual(self.error_service.list_records(run_id=run_id), ())
+
+    def test_list_records_returns_both_generated_and_imported(self) -> None:
+        run_id = self._run_with_exceptions()
+        generated = self.error_service.generate_from_consolidation(run_id=run_id)
+
+        error_report = Path(self.tempdir.name) / "error_report.csv"
+        with error_report.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["Product ID", "Allocated To", "Category", "Type", "Severity"])
+            writer.writerow(["P001", "A001", "Custom Category", "Custom Type", "Low"])
+        imported = self.error_service.import_errors(run_id=run_id, file_path=error_report)
+
+        records = self.error_service.list_records(run_id=run_id)
+        self.assertEqual(len(records), len(generated) + len(imported))
+        self.assertEqual({r.source for r in records}, {ErrorSource.GENERATED, ErrorSource.IMPORTED})
+
+    def test_export_report_produces_a_readable_workbook_with_every_record(self) -> None:
+        run_id = self._run_with_exceptions()
+        self.error_service.generate_from_consolidation(run_id=run_id)
+
+        content = self.error_service.export_report(run_id=run_id)
+
+        export_path = Path(self.tempdir.name) / "error_report_export.xlsx"
+        export_path.write_bytes(content)
+        workbook = load_workbook(export_path, read_only=True, data_only=True)
+        self.assertIn("Errors", workbook.sheetnames)
+        sheet = workbook["Errors"]
+        rows = list(sheet.iter_rows(values_only=True))
+        workbook.close()
+
+        header_row = rows[0]
+        self.assertEqual(header_row[:6], ("Identifier", "Associate ID", "Category", "Type", "Severity", "Source"))
+        self.assertEqual(len(rows) - 1, len(self.error_service.list_records(run_id=run_id)))
+
+    def test_export_report_with_no_errors_yet_is_an_empty_but_valid_workbook(self) -> None:
+        run_id = self._run_with_exceptions()
+        content = self.error_service.export_report(run_id=run_id)
+        export_path = Path(self.tempdir.name) / "empty_export.xlsx"
+        export_path.write_bytes(content)
+        workbook = load_workbook(export_path, read_only=True, data_only=True)
+        sheet = workbook["Errors"]
+        rows = list(sheet.iter_rows(values_only=True))
+        workbook.close()
+        self.assertEqual(len(rows), 1)  # Header row only.

@@ -93,6 +93,7 @@ class RunDetailView(QWidget):
             ("import_qc", "Import QC Report…", {RunState.CONSOLIDATED}, self._on_import_qc),
             ("generate_errors", "Generate Errors From Consolidation", _ANY_TIME_AFTER_CONSOLIDATED, self._on_generate_errors),
             ("import_errors", "Import Error Report…", _ANY_TIME_AFTER_CONSOLIDATED, self._on_import_errors),
+            ("export_errors", "Export Error Report…", _ANY_TIME_AFTER_CONSOLIDATED, self._on_export_errors),
             ("view_insights", "View Insights", _ANY_TIME_AFTER_CONSOLIDATED, self._on_view_insights),
             ("complete", "Mark Run Completed", {RunState.QC_COMPLETED}, self._on_complete),
             ("cancel", "Cancel Run", {RunState.DRAFT}, self._on_cancel),
@@ -227,6 +228,15 @@ class RunDetailView(QWidget):
             return
         records = run_actions.import_errors(self.context, run_id=self.run_id, file_path=Path(file_path))
         self._append_log(f"Imported {len(records)} error record(s).")
+
+    def _on_export_errors(self) -> None:
+        default_name = f"{self.run_id}_error_report.xlsx"
+        file_path, _filter = QFileDialog.getSaveFileName(self, "Save error report", default_name, "Excel Files (*.xlsx)")
+        if not file_path:
+            return
+        content = run_actions.export_error_report(self.context, run_id=self.run_id)
+        Path(file_path).write_bytes(content)
+        self._append_log(f"Exported error report to '{file_path}'.")
 
     def _on_view_insights(self) -> None:
         report = run_actions.generate_insights(self.context, run_id=self.run_id)

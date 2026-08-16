@@ -77,5 +77,13 @@ class RunActionsTestCase(unittest.TestCase):
         self.assertFalse(report.run_metrics["qc_score"].is_not_applicable)
 
         run_actions.generate_errors(self.context, run_id=run.run_id)
+
+        export_content = run_actions.export_error_report(self.context, run_id=run.run_id)
+        export_path = Path(self.tempdir.name) / "error_report.xlsx"
+        export_path.write_bytes(export_content)
+        export_workbook = load_workbook(export_path, read_only=True, data_only=True)
+        self.assertIn("Errors", export_workbook.sheetnames)
+        export_workbook.close()
+
         completed = run_actions.complete_run(self.context, run_id=run.run_id)
         self.assertEqual(completed.state, RunState.COMPLETED)

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from operations_allocation.core.errors import UNCLASSIFIED, classify, parse_classification_rule
+from operations_allocation.core.errors import UNCLASSIFIED, build_error_report_rows, classify, parse_classification_rule
 from operations_allocation.domain.exceptions import InvalidErrorRuleError
+from operations_allocation.domain.models import ErrorRecord, ErrorSource
 
 
 def _rule(match: dict, category="Missing", error_type="Item Not Returned", severity="Critical") -> dict:
@@ -58,3 +59,28 @@ class ClassifyTestCase(unittest.TestCase):
 
     def test_empty_rules_always_unclassified(self) -> None:
         self.assertEqual(classify({"disposition": "missing"}, []), (UNCLASSIFIED, UNCLASSIFIED, UNCLASSIFIED))
+
+
+class BuildErrorReportRowsTestCase(unittest.TestCase):
+    def test_fixed_columns_plus_union_of_dynamic_fields(self) -> None:
+        records = [
+            ErrorRecord(
+                run_id="R1", identifier="P001", associate_id="A001", category="Missing",
+                error_type="Not Returned", severity="Critical", source=ErrorSource.GENERATED,
+                fields={"disposition": "missing"},
+            ),
+            ErrorRecord(
+                run_id="R1", identifier="P002", associate_id="A002", category="Wrong PT",
+                error_type="Miscategorized", severity="High", source=ErrorSource.IMPORTED,
+                fields={"Reviewer": "J. Doe", "Notes": "Should be Clothing"},
+            ),
+        ]
+        headers, rows = build_error_report_rows(records)
+        self.assertEqual(headers, ("Identifier", "Associate ID", "Category", "Type", "Severity", "Source", "disposition", "Reviewer", "Notes"))
+        self.assertEqual(rows[0], ("P001", "A001", "Missing", "Not Returned", "Critical", "generated", "missing", None, None))
+        self.assertEqual(rows[1], ("P002", "A002", "Wrong PT", "Miscategorized", "High", "imported", None, "J. Doe", "Should be Clothing"))
+
+    def test_no_records_gives_fixed_headers_and_no_rows(self) -> None:
+        headers, rows = build_error_report_rows([])
+        self.assertEqual(headers, ("Identifier", "Associate ID", "Category", "Type", "Severity", "Source"))
+        self.assertEqual(rows, ())

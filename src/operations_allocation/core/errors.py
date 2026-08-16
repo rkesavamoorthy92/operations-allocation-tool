@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 from operations_allocation.domain.exceptions import InvalidErrorRuleError
+from operations_allocation.domain.models import ErrorRecord
 
 UNCLASSIFIED = "unclassified"
 
@@ -64,3 +65,32 @@ def classify(fields: Mapping[str, str | None], rules: Sequence[ErrorClassificati
         if all(fields.get(field_name) == expected for field_name, expected in rule.match.items()):
             return rule.category, rule.error_type, rule.severity
     return UNCLASSIFIED, UNCLASSIFIED, UNCLASSIFIED
+
+
+def build_error_report_rows(records: Sequence[ErrorRecord]) -> tuple[tuple[str, ...], tuple[tuple[object, ...], ...]]:
+    """Flatten classified error records into a single exportable table
+    (same 'fixed columns + union of dynamic fields, in first-appearance
+    order' pattern as core.consolidation.build_consolidated_export, so
+    Error Reporting's export has the same shape/rationale as
+    Consolidation's rather than a bespoke one-off layout).
+
+    Returns (headers, rows). Fixed columns come first (Identifier,
+    Associate ID, Category, Type, Severity, Source), followed by every
+    key seen across any record's ``fields`` mapping -- this covers both
+    GENERATED records (whose fields carry e.g. 'disposition') and
+    IMPORTED records (whose fields are that report's own raw columns).
+    """
+    field_names: list[str] = []
+    for record in records:
+        for key in record.fields.keys():
+            if key not in field_names:
+                field_names.append(key)
+    headers = ("Identifier", "Associate ID", "Category", "Type", "Severity", "Source", *field_names)
+    rows = tuple(
+        (
+            record.identifier, record.associate_id, record.category, record.error_type,
+            record.severity, record.source.value, *(record.fields.get(name) for name in field_names),
+        )
+        for record in records
+    )
+    return headers, rows
