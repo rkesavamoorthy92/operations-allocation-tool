@@ -77,6 +77,10 @@ def import_errors(context: Any, *, run_id: str, file_path: Path | str) -> tuple[
     return context.errors.import_errors(run_id=run_id, file_path=file_path)
 
 
+def generate_insights(context: Any, *, run_id: str) -> Any:
+    return context.insights.generate(run_id=run_id)
+
+
 def complete_run(context: Any, *, run_id: str) -> Any:
     return context.orchestration.transition(run_id, RunState.COMPLETED)
 

@@ -18,8 +18,10 @@ from operations_allocation.domain.models import RunState
 from operations_allocation.ui.action_dialogs import ConsolidationOverrideDialog
 from operations_allocation.ui.app_context import AppContext
 from operations_allocation.ui.dashboard_view import DashboardView
+from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.main_window import MainWindow
 from operations_allocation.ui.run_detail_view import RunDetailView
+from operations_allocation.ui import run_actions
 from operations_allocation.ui.setup_dialogs import FreezeSetupDialog, NewProgramDialog, NewRunDialog
 from tests.unit.test_distribution_service import distribution_config
 
@@ -60,6 +62,7 @@ class UiSmokeTestCase(unittest.TestCase):
         self.assertTrue(view._buttons["cancel"].isEnabled())
         self.assertFalse(view._buttons["import_source"].isEnabled())
         self.assertFalse(view._buttons["distribute"].isEnabled())
+        self.assertFalse(view._buttons["view_insights"].isEnabled())
 
     def test_run_detail_buttons_update_after_freeze_setup(self) -> None:
         associates = [{"associate_id": "A001", "name": "Jane", "email": "jane@example.test", "active": True, "target": 5, "maximum_capacity": 5}]
@@ -96,3 +99,9 @@ class UiSmokeTestCase(unittest.TestCase):
         dialog._on_accept()
         self.assertTrue(dialog.override)
         self.assertEqual(dialog.override_reason, "Investigated separately.")
+
+    def test_insights_dialog_constructs_for_a_run_with_no_data_yet(self) -> None:
+        run = self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
+        report = run_actions.generate_insights(self.context, run_id=run.run_id)
+        dialog = InsightsDialog(report, run.run_id)
+        self.assertIn(run.run_id, dialog.windowTitle())

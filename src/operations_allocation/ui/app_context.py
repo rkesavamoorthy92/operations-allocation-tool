@@ -34,6 +34,7 @@ from operations_allocation.services.distribution import DistributionService
 from operations_allocation.services.eligible_population import EligiblePopulationService
 from operations_allocation.services.email_drafts import EmailDraftService
 from operations_allocation.services.errors import ErrorService
+from operations_allocation.services.insights import InsightsService
 from operations_allocation.services.program_configuration import ProgramConfigurationService
 from operations_allocation.services.qc import QcService
 from operations_allocation.services.run_orchestration import RunOrchestrationService
@@ -60,6 +61,7 @@ class AppContext:
     snapshots: SnapshotRepository
     audit_repository: AuditRepository
     file_artifacts: FileArtifactManager
+    allocation_results: AllocationResultRepository
     program_configuration: ProgramConfigurationService
     orchestration: RunOrchestrationService
     source_import: SourceImportService
@@ -71,6 +73,7 @@ class AppContext:
     consolidation: ConsolidationService
     qc: QcService
     errors: ErrorService
+    insights: InsightsService
     audit: AuditService
 
     @classmethod
@@ -105,13 +108,15 @@ class AppContext:
         consolidation = ConsolidationService(runs=runs, snapshots=snapshots, allocation_results=allocation_results, file_artifacts=file_artifacts, audit=audit)
         qc = QcService(runs=runs, snapshots=snapshots, file_artifacts=file_artifacts, audit=audit)
         errors = ErrorService(snapshots=snapshots, file_artifacts=file_artifacts, audit=audit)
+        insights = InsightsService(runs=runs, allocation_results=allocation_results, file_artifacts=file_artifacts)
 
         return cls(
             data_directory=directory, database=database, programs=programs, runs=runs, snapshots=snapshots,
-            audit_repository=audit_repository, file_artifacts=file_artifacts, program_configuration=program_configuration,
+            audit_repository=audit_repository, file_artifacts=file_artifacts, allocation_results=allocation_results,
+            program_configuration=program_configuration,
             orchestration=orchestration, source_import=source_import, eligible_population=eligible_population,
             sampling=sampling, allocation=allocation, distribution=distribution, email_drafts=email_drafts,
-            consolidation=consolidation, qc=qc, errors=errors, audit=audit,
+            consolidation=consolidation, qc=qc, errors=errors, insights=insights, audit=audit,
         )
 
     @staticmethod
