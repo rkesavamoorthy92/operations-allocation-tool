@@ -33,9 +33,7 @@ from operations_allocation.ui.duplicate_resolution_view import DuplicateResoluti
 from operations_allocation.ui.formatting import format_percentage, state_label
 from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.setup_dialogs import FreezeSetupDialog
-
-_ANY_TIME_AFTER_CONSOLIDATED = {RunState.CONSOLIDATED, RunState.QC_COMPLETED, RunState.COMPLETED}
-_ANY_STATE = set(RunState)
+from operations_allocation.ui.stepper_spec import STEPPER_ACTIONS
 
 
 class RunDetailView(QWidget):
@@ -77,29 +75,30 @@ class RunDetailView(QWidget):
 
         self.refresh()
 
-    def _action_specs(self) -> list[tuple[str, str, set[RunState], Callable[[], None]]]:
-        return [
-            ("freeze_setup", "Freeze Setup…", {RunState.DRAFT}, self._on_freeze_setup),
-            ("import_source", "Import Source File & Validate…", {RunState.SNAPSHOT_FROZEN}, self._on_import_source),
-            ("freeze_population", "Freeze Eligible Population", {RunState.VALIDATED}, self._on_freeze_population),
-            ("sample", "Draw Sample", {RunState.ELIGIBLE_POPULATION_FROZEN}, self._on_sample),
-            ("preview_allocation", "Preview Allocation", {RunState.SAMPLED}, self._on_preview_allocation),
-            ("finalize_allocation", "Finalize Allocation", {RunState.SAMPLED}, self._on_finalize_allocation),
-            ("distribute", "Distribute Associate Files", {RunState.ALLOCATED}, self._on_distribute),
-            ("send_individual", "Send Individual Emails (Outlook)", {RunState.DISTRIBUTED}, self._on_send_individual),
-            ("send_consolidated", "Send Consolidated Email (Outlook)", {RunState.DISTRIBUTED}, self._on_send_consolidated),
-            ("import_returned", "Import Returned Files…", {RunState.DISTRIBUTED}, self._on_import_returned),
-            ("finalize_consolidation", "Finalize Consolidation", {RunState.RETURNED}, self._on_finalize_consolidation),
-            ("import_qc", "Import QC Report…", {RunState.CONSOLIDATED}, self._on_import_qc),
-            ("generate_errors", "Generate Errors From Consolidation", _ANY_TIME_AFTER_CONSOLIDATED, self._on_generate_errors),
-            ("import_errors", "Import Error Report…", _ANY_TIME_AFTER_CONSOLIDATED, self._on_import_errors),
-            ("export_errors", "Export Error Report…", _ANY_TIME_AFTER_CONSOLIDATED, self._on_export_errors),
-            ("view_insights", "View Insights", _ANY_TIME_AFTER_CONSOLIDATED, self._on_view_insights),
-            ("export_summary", "Export Run Summary Report…", _ANY_TIME_AFTER_CONSOLIDATED, self._on_export_summary),
-            ("complete", "Mark Run Completed", {RunState.QC_COMPLETED}, self._on_complete),
-            ("cancel", "Cancel Run", {RunState.DRAFT}, self._on_cancel),
-            ("view_audit_log", "View Audit Log", _ANY_STATE, self._on_view_audit_log),
-        ]
+    def _action_specs(self) -> list[tuple[str, str, frozenset[RunState], Callable[[], None]]]:
+        handlers = {
+            "freeze_setup": self._on_freeze_setup,
+            "import_source": self._on_import_source,
+            "freeze_population": self._on_freeze_population,
+            "sample": self._on_sample,
+            "preview_allocation": self._on_preview_allocation,
+            "finalize_allocation": self._on_finalize_allocation,
+            "distribute": self._on_distribute,
+            "send_individual": self._on_send_individual,
+            "send_consolidated": self._on_send_consolidated,
+            "import_returned": self._on_import_returned,
+            "finalize_consolidation": self._on_finalize_consolidation,
+            "import_qc": self._on_import_qc,
+            "generate_errors": self._on_generate_errors,
+            "import_errors": self._on_import_errors,
+            "export_errors": self._on_export_errors,
+            "view_insights": self._on_view_insights,
+            "export_summary": self._on_export_summary,
+            "complete": self._on_complete,
+            "cancel": self._on_cancel,
+            "view_audit_log": self._on_view_audit_log,
+        }
+        return [(key, label, states, handlers[key]) for key, label, states in STEPPER_ACTIONS]
 
     def _make_handler(self, key: str) -> Callable[[], None]:
         return lambda: self._run_guarded(key)
