@@ -15,9 +15,11 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication, QTableWidget
 
 from operations_allocation.domain.models import RunState
+from operations_allocation.core.validation import DuplicateGroup
 from operations_allocation.ui.action_dialogs import ConsolidationOverrideDialog
 from operations_allocation.ui.app_context import AppContext
 from operations_allocation.ui.audit_view import AuditLogDialog
+from operations_allocation.ui.duplicate_resolution_view import DuplicateResolutionDialog
 from operations_allocation.ui.dashboard_view import DashboardView
 from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.main_window import MainWindow
@@ -113,3 +115,22 @@ class UiSmokeTestCase(unittest.TestCase):
         table = dialog.findChild(QTableWidget)
         self.assertEqual(table.rowCount(), len(self.context.audit_repository.for_run(run.run_id)))
         self.assertIn(run.run_id, dialog.windowTitle())
+
+    def test_duplicate_resolution_dialog_defaults_to_exclude_all(self) -> None:
+        groups = (DuplicateGroup(normalized_identifier="P001", original_values=("P001", "p001"), row_indexes=(0, 1)),)
+        dialog = DuplicateResolutionDialog(groups, "tester")
+        dialog.reason_field.setPlainText("Confirmed true duplicates.")
+        dialog._on_accept()
+        self.assertEqual(len(dialog.resolutions), 1)
+        self.assertEqual(dialog.resolutions[0].action, "EXCLUDE_ALL")
+        self.assertIsNone(dialog.resolutions[0].kept_row_index)
+
+    def test_duplicate_resolution_dialog_keep_row_selection(self) -> None:
+        groups = (DuplicateGroup(normalized_identifier="P001", original_values=("P001", "p001"), row_indexes=(0, 1)),)
+        dialog = DuplicateResolutionDialog(groups, "tester")
+        _group, combo = dialog._combos[0]
+        combo.setCurrentIndex(1)  # "Keep row 0"
+        dialog.reason_field.setPlainText("Row 0 is the authoritative entry.")
+        dialog._on_accept()
+        self.assertEqual(dialog.resolutions[0].action, "KEEP_ROW")
+        self.assertEqual(dialog.resolutions[0].kept_row_index, 0)

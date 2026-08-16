@@ -19,12 +19,8 @@ def import_source_and_validate(context: Any, *, run_id: str, file_path: Path | s
     return canonical_rows, summary
 
 
-def freeze_eligible_population(context: Any, *, run_id: str, canonical_rows: list[dict]) -> Any:
-    """v1 scope note: does not yet support duplicate-resolution input from
-    the UI -- if any duplicate identifier groups were detected during
-    validation, this raises UnresolvedDuplicatesError (surfaced to the
-    user) rather than silently picking a resolution."""
-    return context.eligible_population.freeze(run_id=run_id, rows=canonical_rows, resolved_by=context.current_os_username())
+def freeze_eligible_population(context: Any, *, run_id: str, canonical_rows: list[dict], resolutions: tuple = ()) -> Any:
+    return context.eligible_population.freeze(run_id=run_id, rows=canonical_rows, resolutions=resolutions, resolved_by=context.current_os_username())
 
 
 def sample(context: Any, *, run_id: str) -> Any:

@@ -29,6 +29,7 @@ from operations_allocation.domain.models import RunState
 from operations_allocation.ui import run_actions
 from operations_allocation.ui.action_dialogs import ConsolidationOverrideDialog, ReturnedFilesDialog
 from operations_allocation.ui.audit_view import AuditLogDialog
+from operations_allocation.ui.duplicate_resolution_view import DuplicateResolutionDialog
 from operations_allocation.ui.formatting import format_percentage, state_label
 from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.setup_dialogs import FreezeSetupDialog
@@ -42,6 +43,7 @@ class RunDetailView(QWidget):
         super().__init__(parent)
         self.context, self.run_id, self.on_back = context, run_id, on_back
         self._canonical_rows: list[dict] | None = None
+        self._duplicate_groups: tuple = ()
         self._last_reconciliation: dict | None = None
 
         self.header_label = QLabel()
@@ -135,6 +137,7 @@ class RunDetailView(QWidget):
             return
         canonical_rows, summary = run_actions.import_source_and_validate(self.context, run_id=self.run_id, file_path=file_path)
         self._canonical_rows = canonical_rows
+        self._duplicate_groups = summary.duplicate_groups
         self._append_log(
             f"Imported {summary.total_rows} rows. Valid: {summary.valid_row_count}. "
             f"Critical issues: {len(summary.critical_issues)}. Duplicate groups: {len(summary.duplicate_groups)}."
@@ -144,7 +147,14 @@ class RunDetailView(QWidget):
         if self._canonical_rows is None:
             QMessageBox.warning(self, "Import source first", "Re-run 'Import Source File & Validate' in this session before freezing.")
             return
-        population = run_actions.freeze_eligible_population(self.context, run_id=self.run_id, canonical_rows=self._canonical_rows)
+        resolutions: tuple = ()
+        if self._duplicate_groups:
+            dialog = DuplicateResolutionDialog(self._duplicate_groups, self.context.current_os_username(), self)
+            if not dialog.exec():
+                self._append_log("Freeze cancelled; duplicate identifiers remain unresolved.")
+                return
+            resolutions = tuple(dialog.resolutions)
+        population = run_actions.freeze_eligible_population(self.context, run_id=self.run_id, canonical_rows=self._canonical_rows, resolutions=resolutions)
         self._append_log(f"Eligible Population frozen with {len(population.member_identifiers)} items.")
 
     def _on_sample(self) -> None:
