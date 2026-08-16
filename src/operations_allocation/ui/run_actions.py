@@ -81,6 +81,10 @@ def generate_insights(context: Any, *, run_id: str) -> Any:
     return context.insights.generate(run_id=run_id)
 
 
+def export_run_summary_report(context: Any, *, run_id: str) -> bytes:
+    return context.reporting.export_run_summary(run_id=run_id)
+
+
 def complete_run(context: Any, *, run_id: str) -> Any:
     return context.orchestration.transition(run_id, RunState.COMPLETED)
 

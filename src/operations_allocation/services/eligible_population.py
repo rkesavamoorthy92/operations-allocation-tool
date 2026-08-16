@@ -6,10 +6,13 @@ Implements the processing sequence from PROJECT_SPEC.md section 8:
     Input -> Validation -> User-approved exclusions/resolution
     -> Freeze eligible population -> Random sampling
 
-Rows are supplied directly by the caller for this phase since the File
-Artifact Manager / import pipeline has not been built yet; once it exists,
-callers will source ``rows`` from the imported canonical artifact for the
-Run instead of holding them in memory.
+Rows are supplied directly by the caller for this phase -- in practice
+that's ui.run_actions.import_source_and_validate, which sources them
+from services.source_import.SourceImportService's canonical artifact for
+the Run rather than re-parsing the original file. Keeping ``rows`` as an
+explicit parameter here (rather than this service reaching into the
+artifact store itself) keeps this service testable with plain in-memory
+data and keeps the artifact-reading concern in one place.
 """
 
 from __future__ import annotations

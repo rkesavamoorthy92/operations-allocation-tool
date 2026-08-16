@@ -95,6 +95,7 @@ class RunDetailView(QWidget):
             ("import_errors", "Import Error Report…", _ANY_TIME_AFTER_CONSOLIDATED, self._on_import_errors),
             ("export_errors", "Export Error Report…", _ANY_TIME_AFTER_CONSOLIDATED, self._on_export_errors),
             ("view_insights", "View Insights", _ANY_TIME_AFTER_CONSOLIDATED, self._on_view_insights),
+            ("export_summary", "Export Run Summary Report…", _ANY_TIME_AFTER_CONSOLIDATED, self._on_export_summary),
             ("complete", "Mark Run Completed", {RunState.QC_COMPLETED}, self._on_complete),
             ("cancel", "Cancel Run", {RunState.DRAFT}, self._on_cancel),
             ("view_audit_log", "View Audit Log", _ANY_STATE, self._on_view_audit_log),
@@ -241,6 +242,15 @@ class RunDetailView(QWidget):
     def _on_view_insights(self) -> None:
         report = run_actions.generate_insights(self.context, run_id=self.run_id)
         InsightsDialog(report, self.run_id, self).exec()
+
+    def _on_export_summary(self) -> None:
+        default_name = f"{self.run_id}_summary_report.xlsx"
+        file_path, _filter = QFileDialog.getSaveFileName(self, "Save run summary report", default_name, "Excel Files (*.xlsx)")
+        if not file_path:
+            return
+        content = run_actions.export_run_summary_report(self.context, run_id=self.run_id)
+        Path(file_path).write_bytes(content)
+        self._append_log(f"Exported run summary report to '{file_path}'.")
 
     def _on_complete(self) -> None:
         run_actions.complete_run(self.context, run_id=self.run_id)

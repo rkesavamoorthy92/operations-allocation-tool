@@ -75,6 +75,7 @@ class UiSmokeTestCase(unittest.TestCase):
         self.assertFalse(view._buttons["distribute"].isEnabled())
         self.assertFalse(view._buttons["view_insights"].isEnabled())
         self.assertFalse(view._buttons["export_errors"].isEnabled())
+        self.assertFalse(view._buttons["export_summary"].isEnabled())
 
     def test_run_detail_buttons_update_after_freeze_setup(self) -> None:
         associates = [{"associate_id": "A001", "name": "Jane", "email": "jane@example.test", "active": True, "target": 5, "maximum_capacity": 5}]

@@ -35,6 +35,7 @@ from operations_allocation.services.eligible_population import EligiblePopulatio
 from operations_allocation.services.email_drafts import EmailDraftService
 from operations_allocation.services.errors import ErrorService
 from operations_allocation.services.insights import InsightsService
+from operations_allocation.services.reporting import ReportingService
 from operations_allocation.services.program_configuration import ProgramConfigurationService
 from operations_allocation.services.qc import QcService
 from operations_allocation.services.run_orchestration import RunOrchestrationService
@@ -90,6 +91,7 @@ class AppContext:
     qc: QcService
     errors: ErrorService
     insights: InsightsService
+    reporting: ReportingService
     audit: AuditService
 
     @classmethod
@@ -125,6 +127,7 @@ class AppContext:
         qc = QcService(runs=runs, snapshots=snapshots, file_artifacts=file_artifacts, audit=audit)
         errors = ErrorService(snapshots=snapshots, file_artifacts=file_artifacts, audit=audit)
         insights = InsightsService(runs=runs, allocation_results=allocation_results, file_artifacts=file_artifacts)
+        reporting = ReportingService(runs=runs, programs=programs, insights=insights)
 
         return cls(
             data_directory=directory, database=database, programs=programs, runs=runs, snapshots=snapshots,
@@ -132,7 +135,7 @@ class AppContext:
             program_configuration=program_configuration,
             orchestration=orchestration, source_import=source_import, eligible_population=eligible_population,
             sampling=sampling, allocation=allocation, distribution=distribution, email_drafts=email_drafts,
-            consolidation=consolidation, qc=qc, errors=errors, insights=insights, audit=audit,
+            consolidation=consolidation, qc=qc, errors=errors, insights=insights, reporting=reporting, audit=audit,
         )
 
     @staticmethod
