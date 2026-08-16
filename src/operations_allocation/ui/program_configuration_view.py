@@ -29,7 +29,16 @@ from operations_allocation.domain.exceptions import InvalidConfigurationError
 
 def starter_template(program_id: str, program_name: str) -> dict[str, Any]:
     """A minimal, already-valid configuration skeleton so authors edit a
-    working document rather than starting from a blank page."""
+    working document rather than starting from a blank page.
+
+    The email templates and filename pattern here are deliberately
+    complete, working defaults (not empty placeholders) -- an empty
+    ``templates`` dict or a filename pattern missing {ASSOCIATE_ID} both
+    look "valid" to validate_program_configuration() but fail loudly
+    later (a missing-template error the moment emails are sent, or a
+    filename collision the moment a second associate is distributed to).
+    Authors can still edit or replace these tokens/templates freely.
+    """
     return {
         "program_id": program_id, "program_name": program_name, "version": 1,
         "primary_identifier": {"field": "product_id", "case_sensitive": True, "normalization": {"trim_whitespace": True}},
@@ -41,7 +50,14 @@ def starter_template(program_id: str, program_name: str) -> dict[str, Any]:
         ],
         "validation": {}, "sampling": {"allowed_methods": ["percentage", "count"]},
         "allocation": {"strategy": "target_capacity"}, "tie_breaking": {"field": "associate_id"},
-        "qc": {}, "errors": {}, "filename": {"pattern": "{PROGRAM}_{RUN_ID}.xlsx"}, "email": {"templates": {}},
+        "qc": {}, "errors": {},
+        "filename": {"pattern": "{PROGRAM}_{ASSOCIATE_ID}_{ASSOCIATE_NAME}_{RUN_ID}.xlsx"},
+        "email": {"templates": {
+            "individual_subject": "{{program_name}} {{run_id}} -- Your Allocated Items ({{item_count}})",
+            "individual_body": "Hi {{associate_name}},\n\nYou have been allocated {{item_count}} item(s) for {{program_name}} Run {{run_id}}.\nPlease complete and return the attached file by {{due_date}}.\n\nThanks!",
+            "consolidated_subject": "{{program_name}} {{run_id}} -- Allocation Summary",
+            "consolidated_body": "Team,\n\n{{item_count}} item(s) have been allocated across the team for {{program_name}} Run {{run_id}}.\nPlease return completed files by {{due_date}}.\n\nThanks!",
+        }},
     }
 
 

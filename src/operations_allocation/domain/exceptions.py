@@ -132,3 +132,11 @@ class InvalidErrorRuleError(OperationsAllocationError):
 
 class InvalidErrorRecordError(OperationsAllocationError):
     """Raised when an imported error report row is missing its required identifier."""
+
+
+class InvalidReturnedFileError(OperationsAllocationError):
+    """Raised when a file selected in 'Import Returned Files' does not have
+    the Metadata/Data sheet layout produced by Distribution -- e.g. the
+    original source file or some other spreadsheet was selected instead
+    of the actual work file that was sent to (and returned by) the
+    associate."""

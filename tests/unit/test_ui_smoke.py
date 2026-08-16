@@ -183,6 +183,32 @@ class UiSmokeTestCase(unittest.TestCase):
         dialog = ProgramConfigurationDialog(self.context, "MX-QC")
         self.assertEqual(json.loads(dialog.editor.toPlainText()), starter_template("MX-QC", "MX QC"))
 
+    def test_starter_template_email_templates_actually_render(self) -> None:
+        # Regression: the starter template used to ship with
+        # email.templates = {} -- schema-valid, but guaranteed to fail
+        # with 'Email configuration is missing required template(s)' the
+        # moment anyone clicked Send Emails on a program configured
+        # through this dialog with defaults untouched.
+        from operations_allocation.core.email_templates import render_template
+
+        templates = starter_template("MX-QC", "MX QC")["email"]["templates"]
+        for key in ("individual_subject", "individual_body", "consolidated_subject", "consolidated_body"):
+            self.assertIn(key, templates)
+        individual_values = {"associate_name": "a", "program_name": "p", "run_id": "r", "item_count": "1", "due_date": "d"}
+        render_template(templates["individual_subject"], individual_values)
+        render_template(templates["individual_body"], individual_values)
+        consolidated_values = {"program_name": "p", "run_id": "r", "item_count": "1", "due_date": "d"}
+        render_template(templates["consolidated_subject"], consolidated_values)
+        render_template(templates["consolidated_body"], consolidated_values)
+
+    def test_starter_template_filename_pattern_avoids_associate_collisions(self) -> None:
+        # Regression: {PROGRAM}_{RUN_ID}.xlsx alone gives every associate
+        # in a Run the identical filename, which raises
+        # ArtifactAlreadyExistsError the moment a second associate is
+        # distributed to.
+        pattern = starter_template("MX-QC", "MX QC")["filename"]["pattern"]
+        self.assertIn("{ASSOCIATE_ID}", pattern)
+
     def test_program_configuration_dialog_shows_error_for_invalid_json(self) -> None:
         dialog = ProgramConfigurationDialog(self.context, "MX-PT")
         dialog.editor.setPlainText("{not valid json")
