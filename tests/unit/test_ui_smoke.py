@@ -12,11 +12,12 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QTableWidget
 
 from operations_allocation.domain.models import RunState
 from operations_allocation.ui.action_dialogs import ConsolidationOverrideDialog
 from operations_allocation.ui.app_context import AppContext
+from operations_allocation.ui.audit_view import AuditLogDialog
 from operations_allocation.ui.dashboard_view import DashboardView
 from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.main_window import MainWindow
@@ -104,4 +105,11 @@ class UiSmokeTestCase(unittest.TestCase):
         run = self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
         report = run_actions.generate_insights(self.context, run_id=run.run_id)
         dialog = InsightsDialog(report, run.run_id)
+        self.assertIn(run.run_id, dialog.windowTitle())
+
+    def test_audit_log_dialog_lists_events(self) -> None:
+        run = self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
+        dialog = AuditLogDialog(self.context, run.run_id)
+        table = dialog.findChild(QTableWidget)
+        self.assertEqual(table.rowCount(), len(self.context.audit_repository.for_run(run.run_id)))
         self.assertIn(run.run_id, dialog.windowTitle())

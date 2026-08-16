@@ -28,11 +28,13 @@ from operations_allocation.domain.exceptions import ConsolidationBlockedByExcept
 from operations_allocation.domain.models import RunState
 from operations_allocation.ui import run_actions
 from operations_allocation.ui.action_dialogs import ConsolidationOverrideDialog, ReturnedFilesDialog
+from operations_allocation.ui.audit_view import AuditLogDialog
 from operations_allocation.ui.formatting import format_percentage, state_label
 from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.setup_dialogs import FreezeSetupDialog
 
 _ANY_TIME_AFTER_CONSOLIDATED = {RunState.CONSOLIDATED, RunState.QC_COMPLETED, RunState.COMPLETED}
+_ANY_STATE = set(RunState)
 
 
 class RunDetailView(QWidget):
@@ -92,6 +94,7 @@ class RunDetailView(QWidget):
             ("view_insights", "View Insights", _ANY_TIME_AFTER_CONSOLIDATED, self._on_view_insights),
             ("complete", "Mark Run Completed", {RunState.QC_COMPLETED}, self._on_complete),
             ("cancel", "Cancel Run", {RunState.DRAFT}, self._on_cancel),
+            ("view_audit_log", "View Audit Log", _ANY_STATE, self._on_view_audit_log),
         ]
 
     def _make_handler(self, key: str) -> Callable[[], None]:
@@ -226,3 +229,6 @@ class RunDetailView(QWidget):
     def _on_cancel(self) -> None:
         run_actions.cancel_run(self.context, run_id=self.run_id)
         self._append_log("Run cancelled.")
+
+    def _on_view_audit_log(self) -> None:
+        AuditLogDialog(self.context, self.run_id, self).exec()
