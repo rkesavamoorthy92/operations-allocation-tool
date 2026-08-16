@@ -110,6 +110,18 @@ class UiSmokeTestCase(unittest.TestCase):
         snapshot = self.context.snapshots.get(run.run_id)
         self.assertTrue(snapshot.configuration["random_seed"])
 
+    def test_freeze_setup_dialog_always_submits_a_due_date(self) -> None:
+        # Regression: EmailDraftService._require_due_date() raises
+        # EmailTemplateError if the snapshot has no due_date at all, and
+        # previously there was no UI field to set one -- every Run frozen
+        # through the app would fail the moment 'Send Emails' was clicked.
+        run = self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
+        dialog = FreezeSetupDialog(self.context, run.run_id, "MX-PT")
+        dialog._cell = lambda row, column: {0: "A001", 1: "Jane", 2: "jane@example.test", 3: "5", 4: "5"}.get(column, "")
+        dialog._on_accept()
+        snapshot = self.context.snapshots.get(run.run_id)
+        self.assertTrue(snapshot.configuration["due_date"])
+
     def test_consolidation_override_dialog_requires_reason(self) -> None:
         summary = {"missing_identifiers": ["P1"], "duplicate_count": 0, "unexpected_count": 0, "wrong_associate_count": 0, "identity_issue_count": 0}
         dialog = ConsolidationOverrideDialog(summary)

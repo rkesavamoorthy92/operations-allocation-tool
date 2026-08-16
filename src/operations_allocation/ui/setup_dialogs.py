@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
     QComboBox,
+    QDateEdit,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -117,6 +119,10 @@ class FreezeSetupDialog(QDialog):
         self.sampling_value_field.setPlaceholderText("e.g. 200 or 5")
         self.random_seed_field = QLineEdit()
         self.random_seed_field.setPlaceholderText("Optional; blank uses a generated seed")
+        self.due_date_field = QDateEdit()
+        self.due_date_field.setCalendarPopup(True)
+        self.due_date_field.setDate(QDate.currentDate().addDays(7))
+        self.due_date_field.setDisplayFormat("yyyy-MM-dd")
 
         self.associates_table = QTableWidget(0, len(_ASSOCIATE_COLUMNS))
         self.associates_table.setHorizontalHeaderLabels(_ASSOCIATE_COLUMNS)
@@ -130,6 +136,7 @@ class FreezeSetupDialog(QDialog):
         form.addRow("Sampling Method", self.sampling_method_combo)
         form.addRow("Sampling Value", self.sampling_value_field)
         form.addRow("Random Seed", self.random_seed_field)
+        form.addRow("Due Date (shown to associates in email drafts)", self.due_date_field)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._on_accept)
@@ -184,6 +191,7 @@ class FreezeSetupDialog(QDialog):
                 sampling=sampling,
                 random_seed=random_seed,
                 associates=self._collect_associates(),
+                due_date=self.due_date_field.date().toString("yyyy-MM-dd"),
             )
         except Exception as error:
             QMessageBox.critical(self, "Could not freeze setup", str(error))
