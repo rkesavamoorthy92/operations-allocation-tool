@@ -13,6 +13,7 @@ output/*
 dist/
 build/
 *.spec
+!packaging/operations_allocation.spec
 .vscode/
 
 *.egg-info/

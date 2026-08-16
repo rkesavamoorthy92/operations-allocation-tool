@@ -46,7 +46,23 @@ def default_data_directory() -> Path:
     """PROJECT_SPEC.md section 29 / ARCHITECTURE.md section 11: mutable
     application data lives in a user-writable local application data
     directory, never the installation directory. Falls back to a local
-    folder outside Windows (e.g. for development on macOS)."""
+    folder outside Windows (e.g. for development on macOS).
+
+    Checks OPERATIONS_ALLOCATION_DATA_DIR first so a future move to a
+    shared/network location (multiple teammates working from the same
+    Programs/Runs database) is a deployment-time environment variable,
+    not a code change or rebuild -- e.g. an .exe shortcut whose "Target"
+    sets this variable before launching, or a small wrapper .bat.
+    Trailing/leading whitespace is stripped -- Windows' own "Edit
+    environment variables" dialog and hand-written .bat wrappers both
+    make it easy to leave a stray trailing space, which sqlite3 then
+    treats as a literal (and non-existent) path character, failing with
+    a confusing 'unable to open database file' rather than anything
+    that points at the real cause.
+    """
+    override = os.environ.get("OPERATIONS_ALLOCATION_DATA_DIR", "").strip()
+    if override:
+        return Path(override)
     local_app_data = os.environ.get("LOCALAPPDATA")
     base = Path(local_app_data) if local_app_data else Path.home() / ".operations-allocation-tool"
     return base / "OperationsAllocationTool"
