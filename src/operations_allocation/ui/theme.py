@@ -147,6 +147,17 @@ QPushButton[danger="true"]:hover {{
     color: white;
 }}
 
+/* :disabled must win over [accent]/[danger] regardless of declaration
+order -- QSS breaks specificity ties by "last rule wins", so without
+these, a disabled accent/danger button would still render as if it
+were the enabled call-to-action (this bit us during manual testing:
+"Finalize Allocation" showed solid blue while genuinely disabled). */
+QPushButton[accent="true"]:disabled, QPushButton[danger="true"]:disabled {{
+    background-color: {PALETTE["disabled_bg"]};
+    color: {PALETTE["disabled_text"]};
+    border-color: {PALETTE["disabled_bg"]};
+}}
+
 QDialogButtonBox QPushButton {{
     min-width: 80px;
 }}

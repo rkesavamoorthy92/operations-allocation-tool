@@ -19,6 +19,14 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _run_from_row(row: sqlite3.Row) -> Run:
+    return Run(
+        row["run_id"], row["program_id"], row["created_by"], datetime.fromisoformat(row["created_at"]),
+        RunState(row["state"]), date.fromisoformat(row["due_date"]) if row["due_date"] else None,
+        row["snapshot_id"], datetime.fromisoformat(row["archived_at"]) if row["archived_at"] else None,
+    )
+
+
 @contextmanager
 def _write_scope(database: Any, connection: sqlite3.Connection | None) -> Iterator[sqlite3.Connection]:
     if connection is not None:
@@ -70,10 +78,17 @@ class ProgramRepository:
                 raise PersistenceError(f"Program '{program_id}' could not be found.")
             return Program(row["program_id"], row["name"], row["active_configuration_version"], bool(row["active"]))
 
-    def list_all(self) -> tuple[Program, ...]:
+    def list_all(self, *, include_archived: bool = False) -> tuple[Program, ...]:
+        query = "SELECT * FROM programs" if include_archived else "SELECT * FROM programs WHERE active = 1"
         with _read_scope(self.database) as conn:
-            rows = conn.execute("SELECT * FROM programs ORDER BY program_id").fetchall()
+            rows = conn.execute(f"{query} ORDER BY program_id").fetchall()
             return tuple(Program(row["program_id"], row["name"], row["active_configuration_version"], bool(row["active"])) for row in rows)
+
+    def set_active(self, program_id: str, active: bool) -> None:
+        with _write_scope(self.database, None) as conn:
+            cursor = conn.execute("UPDATE programs SET active = ? WHERE program_id = ?", (int(active), program_id))
+            if cursor.rowcount == 0:
+                raise PersistenceError(f"Program '{program_id}' could not be found.")
 
 
 class AssociateRepository:
@@ -132,15 +147,25 @@ class RunRepository:
             row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
             if row is None:
                 raise PersistenceError(f"Run '{run_id}' could not be found.")
-            return Run(row["run_id"], row["program_id"], row["created_by"], datetime.fromisoformat(row["created_at"]), RunState(row["state"]), date.fromisoformat(row["due_date"]) if row["due_date"] else None, row["snapshot_id"])
+            return _run_from_row(row)
 
-    def list_all(self) -> tuple[Run, ...]:
+    def list_all(self, *, include_archived: bool = False) -> tuple[Run, ...]:
+        query = "SELECT * FROM runs" if include_archived else "SELECT * FROM runs WHERE archived_at IS NULL"
         with _read_scope(self.database) as conn:
-            rows = conn.execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
-            return tuple(
-                Run(row["run_id"], row["program_id"], row["created_by"], datetime.fromisoformat(row["created_at"]), RunState(row["state"]), date.fromisoformat(row["due_date"]) if row["due_date"] else None, row["snapshot_id"])
-                for row in rows
-            )
+            rows = conn.execute(f"{query} ORDER BY created_at DESC").fetchall()
+            return tuple(_run_from_row(row) for row in rows)
+
+    def archive(self, run_id: str) -> None:
+        with _write_scope(self.database, None) as conn:
+            cursor = conn.execute("UPDATE runs SET archived_at = ? WHERE run_id = ?", (_now(), run_id))
+            if cursor.rowcount == 0:
+                raise PersistenceError(f"Run '{run_id}' could not be found.")
+
+    def restore(self, run_id: str) -> None:
+        with _write_scope(self.database, None) as conn:
+            cursor = conn.execute("UPDATE runs SET archived_at = NULL WHERE run_id = ?", (run_id,))
+            if cursor.rowcount == 0:
+                raise PersistenceError(f"Run '{run_id}' could not be found.")
 
     def update_state(self, run_id: str, state: RunState, connection: sqlite3.Connection | None = None) -> None:
         with _write_scope(self.database, connection) as conn:

@@ -256,7 +256,7 @@ class FoundationTestCase(unittest.TestCase):
         self.assertEqual(second.run_id, "MX-PT-20260815-002")
 
     def test_schema_version_is_deterministic(self) -> None:
-        self.assertEqual(self.runs.database.schema_version(), 6)
+        self.assertEqual(self.runs.database.schema_version(), 7)
 
     def test_associate_master_and_invalid_snapshot_capacity(self) -> None:
         AssociateRepository(self.programs.database).add(Associate("A001", "Associate", "a@example.test", False, default_target=5, default_maximum_capacity=8))

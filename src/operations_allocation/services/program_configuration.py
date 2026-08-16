@@ -28,3 +28,15 @@ class ProgramConfigurationService:
         validate_program_configuration(configuration)
         self.repository.get(configuration["program_id"])
         self.repository.save_configuration(configuration["program_id"], configuration["version"], canonical_json(configuration), sha256_for(configuration))
+
+    def archive_program(self, program_id: str) -> None:
+        """Soft-delete: hides the Program from the Dashboard's default view.
+        Nothing is erased -- Program row, configuration versions, and every
+        Run underneath it stay on disk and are restorable.
+        """
+        self.repository.get(program_id)
+        self.repository.set_active(program_id, False)
+
+    def restore_program(self, program_id: str) -> None:
+        self.repository.get(program_id)
+        self.repository.set_active(program_id, True)

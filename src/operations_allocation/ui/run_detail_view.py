@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -33,7 +34,7 @@ from operations_allocation.ui.duplicate_resolution_view import DuplicateResoluti
 from operations_allocation.ui.formatting import format_percentage, state_color, state_label
 from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.setup_dialogs import FreezeSetupDialog
-from operations_allocation.ui.stepper_spec import STEPPER_ACTIONS
+from operations_allocation.ui.stepper_spec import STEPPER_ACTIONS, STEPPER_GROUPS
 
 _PROGRESSION_KEYS = frozenset(["freeze_setup", "import_source", "freeze_population", "sample", "finalize_allocation", "distribute", "import_returned", "finalize_consolidation", "import_qc", "complete"])
 _DANGER_KEYS = frozenset(["cancel"])
@@ -56,18 +57,28 @@ class RunDetailView(QWidget):
         self.log.setReadOnly(True)
 
         self._buttons: dict[str, QPushButton] = {}
-        actions_box = QGroupBox("Actions")
-        actions_layout = QVBoxLayout()
-        for key, label, _states, _handler in self._action_specs():
-            button = QPushButton(label)
-            if key in _PROGRESSION_KEYS:
-                button.setProperty("accent", True)
-            if key in _DANGER_KEYS:
-                button.setProperty("danger", True)
-            button.clicked.connect(self._make_handler(key))
-            self._buttons[key] = button
-            actions_layout.addWidget(button)
-        actions_box.setLayout(actions_layout)
+        labels_by_key = {key: label for key, label, _states, _handler in self._action_specs()}
+        groups_container = QWidget()
+        groups_layout = QVBoxLayout(groups_container)
+        for group_label, action_keys in STEPPER_GROUPS:
+            group_box = QGroupBox(group_label)
+            group_layout = QVBoxLayout()
+            for key in action_keys:
+                button = QPushButton(labels_by_key[key])
+                if key in _PROGRESSION_KEYS:
+                    button.setProperty("accent", True)
+                if key in _DANGER_KEYS:
+                    button.setProperty("danger", True)
+                button.clicked.connect(self._make_handler(key))
+                self._buttons[key] = button
+                group_layout.addWidget(button)
+            group_box.setLayout(group_layout)
+            groups_layout.addWidget(group_box)
+        groups_layout.addStretch()
+
+        actions_scroll = QScrollArea()
+        actions_scroll.setWidgetResizable(True)
+        actions_scroll.setWidget(groups_container)
 
         top = QHBoxLayout()
         top.addWidget(back_button)
@@ -76,7 +87,7 @@ class RunDetailView(QWidget):
 
         layout = QVBoxLayout(self)
         layout.addLayout(top)
-        layout.addWidget(actions_box)
+        layout.addWidget(actions_scroll)
         activity_log_label = QLabel("Activity Log")
         activity_log_label.setProperty("subheading", True)
         layout.addWidget(activity_log_label)
@@ -156,7 +167,7 @@ class RunDetailView(QWidget):
 
     def _on_freeze_population(self) -> None:
         if self._canonical_rows is None:
-            QMessageBox.warning(self, "Import source first", "Re-run 'Import Source File & Validate' in this session before freezing.")
+            QMessageBox.warning(self, "Import source first", "Re-run 'Import Source File && Validate' in this session before freezing.")
             return
         resolutions: tuple = ()
         if self._duplicate_groups:

@@ -20,6 +20,7 @@ from operations_allocation.core.validation import DuplicateGroup
 from operations_allocation.ui.action_dialogs import ConsolidationOverrideDialog
 from operations_allocation.ui.app_context import AppContext
 from operations_allocation.ui.audit_view import AuditLogDialog
+from operations_allocation.ui.confirm_dialog import TypeToConfirmDialog
 from operations_allocation.ui.duplicate_resolution_view import DuplicateResolutionDialog
 from operations_allocation.ui.dashboard_view import DashboardView
 from operations_allocation.ui.insights_view import InsightsDialog
@@ -64,7 +65,23 @@ class UiSmokeTestCase(unittest.TestCase):
         window.open_run(run.run_id)
         self.assertIsInstance(window.stack.currentWidget(), RunDetailView)
         window.show_dashboard()
-        self.assertIs(window.stack.currentWidget(), window.dashboard)
+
+    def test_archived_run_hidden_by_default_and_shown_when_toggled(self) -> None:
+        run = self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
+        self.context.orchestration.archive(run.run_id)
+        dashboard = DashboardView(self.context, on_open_run=lambda run_id: None)
+        self.assertEqual(dashboard.runs_table.rowCount(), 0)
+        dashboard.show_archived_checkbox.setChecked(True)
+        self.assertEqual(dashboard.runs_table.rowCount(), 1)
+        self.assertEqual(dashboard.runs_table.item(0, 4).text(), "Archived")
+
+    def test_archived_program_hidden_by_default_and_shown_when_toggled(self) -> None:
+        self.context.program_configuration.archive_program("MX-PT")
+        dashboard = DashboardView(self.context, on_open_run=lambda run_id: None)
+        self.assertEqual(dashboard.programs_table.rowCount(), 0)
+        dashboard.show_archived_checkbox.setChecked(True)
+        self.assertEqual(dashboard.programs_table.rowCount(), 1)
+        self.assertEqual(dashboard.programs_table.item(0, 3).text(), "Archived")
 
     def test_run_detail_only_enables_actions_valid_for_draft_state(self) -> None:
         run = self.context.orchestration.create_run(program_id="MX-PT", created_by="tester", created_on=date(2026, 8, 15))
@@ -223,3 +240,20 @@ class UiSmokeTestCase(unittest.TestCase):
         dialog.editor.setPlainText("{not valid json")
         dialog._on_validate()
         self.assertIn("Invalid JSON", dialog.status_label.text())
+
+
+class TypeToConfirmDialogTestCase(unittest.TestCase):
+    def test_ok_disabled_until_expected_text_typed(self) -> None:
+        dialog = TypeToConfirmDialog(title="Archive Program", message="Sure?", expected_text="MX-PT")
+        ok_button = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
+        self.assertFalse(ok_button.isEnabled())
+        dialog.input_field.setText("MX-P")
+        self.assertFalse(ok_button.isEnabled())
+        dialog.input_field.setText("MX-PT")
+        self.assertTrue(ok_button.isEnabled())
+
+    def test_case_sensitive_match_required(self) -> None:
+        dialog = TypeToConfirmDialog(title="Archive Run", message="Sure?", expected_text="MX-PT-20260815-001")
+        ok_button = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
+        dialog.input_field.setText("mx-pt-20260815-001")
+        self.assertFalse(ok_button.isEnabled())

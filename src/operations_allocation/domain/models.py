@@ -86,6 +86,7 @@ class Run:
     state: RunState
     due_date: date | None = None
     snapshot_id: int | None = None
+    archived_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

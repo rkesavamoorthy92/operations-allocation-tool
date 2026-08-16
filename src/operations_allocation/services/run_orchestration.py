@@ -49,6 +49,22 @@ class RunOrchestrationService:
         self.audit.record(run_id=run_id, program_id=run.program_id, action="RUN_STATE_CHANGED", previous_state=run.state, new_state=target)
         return self.runs.get(run_id)
 
+    def archive(self, run_id: str) -> None:
+        """Soft-delete: hides the Run from the Dashboard's default view.
+        The Run row, its snapshot, and every artifact/audit record stay on
+        disk untouched -- restore() reverses this instantly. Allowed from
+        any RunState; archiving is a visibility choice, not a lifecycle
+        transition, so it deliberately does not go through ensure_transition.
+        """
+        run = self.runs.get(run_id)
+        self.runs.archive(run_id)
+        self.audit.record(run_id=run_id, program_id=run.program_id, action="RUN_ARCHIVED", previous_state=run.state, new_state=run.state)
+
+    def restore(self, run_id: str) -> None:
+        run = self.runs.get(run_id)
+        self.runs.restore(run_id)
+        self.audit.record(run_id=run_id, program_id=run.program_id, action="RUN_RESTORED", previous_state=run.state, new_state=run.state)
+
 
 def _validate_snapshot_associates(associates: list[dict[str, Any]]) -> None:
     ids: set[str] = set()

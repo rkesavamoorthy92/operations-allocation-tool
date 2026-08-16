@@ -38,3 +38,34 @@ class RepositoryListingTestCase(unittest.TestCase):
 
     def test_list_all_runs_empty(self) -> None:
         self.assertEqual(self.runs.list_all(), ())
+
+    def test_archived_program_excluded_by_default_and_included_on_request(self) -> None:
+        self.programs.add(Program("MX-PT", "MX PT", 0, True))
+        self.programs.set_active("MX-PT", False)
+        self.assertEqual(self.programs.list_all(), ())
+        self.assertEqual(len(self.programs.list_all(include_archived=True)), 1)
+        self.assertFalse(self.programs.list_all(include_archived=True)[0].active)
+
+    def test_restoring_a_program_makes_it_visible_again(self) -> None:
+        self.programs.add(Program("MX-PT", "MX PT", 0, True))
+        self.programs.set_active("MX-PT", False)
+        self.programs.set_active("MX-PT", True)
+        self.assertEqual(len(self.programs.list_all()), 1)
+
+    def test_archived_run_excluded_by_default_and_included_on_request(self) -> None:
+        self.programs.add(Program("MX-PT", "MX PT", 0, True))
+        run = self.runs.create_next("MX-PT", "user", None, date(2026, 8, 1))
+        self.assertIsNone(self.runs.get(run.run_id).archived_at)
+        self.runs.archive(run.run_id)
+        self.assertEqual(self.runs.list_all(), ())
+        restored_listing = self.runs.list_all(include_archived=True)
+        self.assertEqual(len(restored_listing), 1)
+        self.assertIsNotNone(restored_listing[0].archived_at)
+
+    def test_restoring_a_run_makes_it_visible_again(self) -> None:
+        self.programs.add(Program("MX-PT", "MX PT", 0, True))
+        run = self.runs.create_next("MX-PT", "user", None, date(2026, 8, 1))
+        self.runs.archive(run.run_id)
+        self.runs.restore(run.run_id)
+        self.assertEqual(len(self.runs.list_all()), 1)
+        self.assertIsNone(self.runs.get(run.run_id).archived_at)

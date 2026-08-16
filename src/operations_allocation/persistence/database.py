@@ -15,7 +15,7 @@ from pathlib import Path
 
 from operations_allocation.domain.exceptions import PersistenceError
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 class Database:
@@ -95,6 +95,7 @@ class Database:
             )),
             due_date TEXT,
             snapshot_id INTEGER UNIQUE,
+            archived_at TEXT,
             FOREIGN KEY (snapshot_id, run_id) REFERENCES run_configuration_snapshots(snapshot_id, run_id)
         );
         CREATE TABLE IF NOT EXISTS run_configuration_snapshots (
@@ -240,13 +241,37 @@ class Database:
         """
         try:
             with self.transaction() as connection:
+                self._migrate_pre_existing_tables(connection)
                 connection.executescript(schema)
-                connection.execute("INSERT OR IGNORE INTO schema_metadata (schema_name, schema_version) VALUES ('operations_allocation', ?)", (SCHEMA_VERSION,))
+                connection.execute(
+                    "INSERT INTO schema_metadata (schema_name, schema_version) VALUES ('operations_allocation', ?) "
+                    "ON CONFLICT(schema_name) DO UPDATE SET schema_version = excluded.schema_version "
+                    "WHERE schema_metadata.schema_version < excluded.schema_version",
+                    (SCHEMA_VERSION,),
+                )
                 row = connection.execute("SELECT schema_version FROM schema_metadata WHERE schema_name = 'operations_allocation'").fetchone()
                 if row["schema_version"] != SCHEMA_VERSION:
                     raise PersistenceError("Unsupported local database schema version.")
         except PersistenceError:
             raise
+
+    def _migrate_pre_existing_tables(self, connection: sqlite3.Connection) -> None:
+        """Adds columns introduced after a table already existed on disk.
+        CREATE TABLE IF NOT EXISTS is a no-op against an existing table, so
+        new nullable columns need an explicit, idempotent ALTER TABLE here.
+        Safe to run against a brand-new (not-yet-created) database too --
+        the 'no such table' error is swallowed the same way the
+        'duplicate column' one is.
+        """
+        migrations = (
+            ("runs", "archived_at", "TEXT"),
+        )
+        for table, column, column_type in migrations:
+            try:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+            except sqlite3.OperationalError as error:
+                if "duplicate column" not in str(error) and "no such table" not in str(error):
+                    raise
 
     def schema_version(self) -> int:
         with self.read_transaction() as connection:

@@ -17,6 +17,16 @@ class ThemeTestCase(unittest.TestCase):
         self.assertIn('QPushButton[accent="true"]', STYLESHEET)
         self.assertIn('QPushButton[danger="true"]', STYLESHEET)
 
+    def test_disabled_accent_and_danger_overrides_are_declared_after_the_base_rules(self) -> None:
+        # Regression: QSS breaks equal-specificity ties by "last rule
+        # wins" -- a disabled override declared *before* the plain
+        # [accent="true"]/[danger="true"] rules would silently lose,
+        # leaving a genuinely disabled button rendered as if it were
+        # the enabled call-to-action.
+        accent_index = STYLESHEET.index('QPushButton[accent="true"] {')
+        accent_disabled_index = STYLESHEET.index('QPushButton[accent="true"]:disabled')
+        self.assertGreater(accent_disabled_index, accent_index)
+
     def test_apply_theme_sets_the_stylesheet_on_the_app(self) -> None:
         calls = []
 

@@ -21,7 +21,7 @@ ANY_STATE = frozenset(RunState)
 
 STEPPER_ACTIONS: tuple[tuple[str, str, frozenset[RunState]], ...] = (
     ("freeze_setup", "Freeze Setup…", frozenset({RunState.DRAFT})),
-    ("import_source", "Import Source File & Validate…", frozenset({RunState.SNAPSHOT_FROZEN})),
+    ("import_source", "Import Source File && Validate…", frozenset({RunState.SNAPSHOT_FROZEN})),
     ("freeze_population", "Freeze Eligible Population", frozenset({RunState.VALIDATED})),
     ("sample", "Draw Sample", frozenset({RunState.ELIGIBLE_POPULATION_FROZEN})),
     ("preview_allocation", "Preview Allocation", frozenset({RunState.SAMPLED})),
@@ -46,3 +46,21 @@ STEPPER_ACTIONS: tuple[tuple[str, str, frozenset[RunState]], ...] = (
 def actions_enabled_for(state: RunState) -> dict[str, bool]:
     """Convenience for templates: {action_key: is_enabled_in_this_state}."""
     return {key: state in states for key, _label, states in STEPPER_ACTIONS}
+
+
+# Groups the flat STEPPER_ACTIONS list into labeled checklist sections for
+# display -- purely a presentation grouping (gating logic is still 100%
+# owned by STEPPER_ACTIONS above), added so a first-time user sees "Setup",
+# "Import & Sample", etc. instead of one undifferentiated wall of ~20
+# buttons. Every action_key must appear in exactly one group -- enforced
+# by tests/unit/test_stepper_spec.py, so a future new action can't
+# silently go missing from the UI just because someone forgot to also
+# add it here.
+STEPPER_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("1. Setup", ("freeze_setup", "cancel")),
+    ("2. Import && Sample", ("import_source", "freeze_population", "sample")),
+    ("3. Allocate && Distribute", ("preview_allocation", "finalize_allocation", "distribute", "send_individual", "send_consolidated")),
+    ("4. Consolidate && QC", ("import_returned", "finalize_consolidation", "import_qc")),
+    ("5. Errors && Reports", ("generate_errors", "import_errors", "export_errors", "view_insights", "export_summary")),
+    ("6. Finish", ("complete", "view_audit_log")),
+)
