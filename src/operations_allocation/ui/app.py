@@ -16,8 +16,10 @@ def main() -> int:
 
     from operations_allocation.ui.app_context import AppContext
     from operations_allocation.ui.main_window import MainWindow
+    from operations_allocation.ui.theme import apply_theme
 
     app = QApplication(sys.argv)
+    apply_theme(app)
     context = AppContext.build()
     window = MainWindow(context)
     window.show()

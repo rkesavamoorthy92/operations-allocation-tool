@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -19,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from operations_allocation.ui.formatting import format_timestamp, state_label
+from operations_allocation.ui.formatting import format_timestamp, state_color, state_label
 from operations_allocation.ui.program_configuration_view import ProgramConfigurationDialog
 from operations_allocation.ui.setup_dialogs import NewProgramDialog, NewRunDialog
 
@@ -33,13 +34,15 @@ class DashboardView(QWidget):
         self.context, self.on_open_run = context, on_open_run
 
         title = QLabel("Operations Allocation Tool")
-        title.setStyleSheet("font-size: 20px; font-weight: bold;")
+        title.setProperty("heading", True)
 
         new_program_button = QPushButton("+ New Program")
+        new_program_button.setProperty("accent", True)
         new_program_button.clicked.connect(self._new_program)
         edit_configuration_button = QPushButton("Edit Configuration")
         edit_configuration_button.clicked.connect(self._edit_selected_program_configuration)
         new_run_button = QPushButton("+ New Run")
+        new_run_button.setProperty("accent", True)
         new_run_button.clicked.connect(self._new_run)
         refresh_button = QPushButton("Refresh")
         refresh_button.clicked.connect(self.refresh)
@@ -68,9 +71,9 @@ class DashboardView(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(title)
         layout.addLayout(buttons_row)
-        layout.addWidget(QLabel("Programs (double-click to edit configuration)"))
+        layout.addWidget(_subheading("Programs (double-click to edit configuration)"))
         layout.addWidget(self.programs_table)
-        layout.addWidget(QLabel("Runs (double-click to open)"))
+        layout.addWidget(_subheading("Runs (double-click to open)"))
         layout.addWidget(self.runs_table)
 
         self.refresh()
@@ -89,7 +92,12 @@ class DashboardView(QWidget):
         for row, run in enumerate(runs):
             self.runs_table.setItem(row, 0, QTableWidgetItem(run.run_id))
             self.runs_table.setItem(row, 1, QTableWidgetItem(run.program_id))
-            self.runs_table.setItem(row, 2, QTableWidgetItem(state_label(run.state)))
+            state_item = QTableWidgetItem(state_label(run.state))
+            state_item.setForeground(QBrush(QColor(state_color(run.state))))
+            font = state_item.font()
+            font.setBold(True)
+            state_item.setFont(font)
+            self.runs_table.setItem(row, 2, state_item)
             self.runs_table.setItem(row, 3, QTableWidgetItem(format_timestamp(run.created_at)))
 
     def _new_program(self) -> None:
@@ -127,3 +135,9 @@ class DashboardView(QWidget):
     def _open_selected_run(self, row: int, _column: int) -> None:
         run_id = self.runs_table.item(row, 0).text()
         self.on_open_run(run_id)
+
+
+def _subheading(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setProperty("subheading", True)
+    return label

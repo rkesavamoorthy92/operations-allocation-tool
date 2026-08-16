@@ -30,10 +30,13 @@ from operations_allocation.ui import run_actions
 from operations_allocation.ui.action_dialogs import ConsolidationOverrideDialog, ReturnedFilesDialog
 from operations_allocation.ui.audit_view import AuditLogDialog
 from operations_allocation.ui.duplicate_resolution_view import DuplicateResolutionDialog
-from operations_allocation.ui.formatting import format_percentage, state_label
+from operations_allocation.ui.formatting import format_percentage, state_color, state_label
 from operations_allocation.ui.insights_view import InsightsDialog
 from operations_allocation.ui.setup_dialogs import FreezeSetupDialog
 from operations_allocation.ui.stepper_spec import STEPPER_ACTIONS
+
+_PROGRESSION_KEYS = frozenset(["freeze_setup", "import_source", "freeze_population", "sample", "finalize_allocation", "distribute", "import_returned", "finalize_consolidation", "import_qc", "complete"])
+_DANGER_KEYS = frozenset(["cancel"])
 
 
 class RunDetailView(QWidget):
@@ -45,7 +48,7 @@ class RunDetailView(QWidget):
         self._last_reconciliation: dict | None = None
 
         self.header_label = QLabel()
-        self.header_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self.header_label.setProperty("heading", True)
         back_button = QPushButton("← Back to Dashboard")
         back_button.clicked.connect(self.on_back)
 
@@ -57,6 +60,10 @@ class RunDetailView(QWidget):
         actions_layout = QVBoxLayout()
         for key, label, _states, _handler in self._action_specs():
             button = QPushButton(label)
+            if key in _PROGRESSION_KEYS:
+                button.setProperty("accent", True)
+            if key in _DANGER_KEYS:
+                button.setProperty("danger", True)
             button.clicked.connect(self._make_handler(key))
             self._buttons[key] = button
             actions_layout.addWidget(button)
@@ -70,7 +77,9 @@ class RunDetailView(QWidget):
         layout = QVBoxLayout(self)
         layout.addLayout(top)
         layout.addWidget(actions_box)
-        layout.addWidget(QLabel("Activity Log"))
+        activity_log_label = QLabel("Activity Log")
+        activity_log_label.setProperty("subheading", True)
+        layout.addWidget(activity_log_label)
         layout.addWidget(self.log)
 
         self.refresh()
@@ -118,6 +127,7 @@ class RunDetailView(QWidget):
     def refresh(self) -> None:
         run = self.context.runs.get(self.run_id)
         self.header_label.setText(f"{run.run_id}  ·  {run.program_id}  ·  {state_label(run.state)}")
+        self.header_label.setStyleSheet(f"color: {state_color(run.state)};")
         for key, _label, states, _handler in self._action_specs():
             self._buttons[key].setEnabled(run.state in states)
 
