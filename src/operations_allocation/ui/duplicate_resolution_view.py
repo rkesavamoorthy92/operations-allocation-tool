@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QGroupBox, QLabel, QMessageBox, QPlainTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QGroupBox, QLabel, QMessageBox, QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget
 
 from operations_allocation.core.validation import DuplicateGroup
 from operations_allocation.domain.models import DuplicateResolution
@@ -32,7 +32,13 @@ class DuplicateResolutionDialog(QDialog):
         self.resize(560, 480)
 
         self._combos: list[tuple[DuplicateGroup, QComboBox]] = []
-        layout = QVBoxLayout(self)
+
+        # Duplicate groups can run long -- put them in their own scrollable
+        # area so the Reason field and OK/Cancel buttons below always stay
+        # reachable no matter how many groups need resolving (mirrors the
+        # QScrollArea pattern RunDetailView already uses for its action list).
+        groups_container = QWidget()
+        groups_layout = QVBoxLayout(groups_container)
         for group in duplicate_groups:
             box = QGroupBox(f"Duplicate identifier: {group.normalized_identifier}  ({len(group.row_indexes)} rows)")
             box_layout = QVBoxLayout()
@@ -42,12 +48,21 @@ class DuplicateResolutionDialog(QDialog):
                 combo.addItem(f"Keep row {row_index} (as entered: '{original_value}')", row_index)
             box_layout.addWidget(combo)
             box.setLayout(box_layout)
-            layout.addWidget(box)
+            groups_layout.addWidget(box)
             self._combos.append((group, combo))
+        groups_layout.addStretch()
+
+        groups_scroll = QScrollArea()
+        groups_scroll.setWidgetResizable(True)
+        groups_scroll.setWidget(groups_container)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(groups_scroll)
 
         layout.addWidget(QLabel("Reason (applies to every resolution made below):"))
         self.reason_field = QPlainTextEdit()
         self.reason_field.setPlaceholderText("Required: why are these duplicates being resolved this way?")
+        self.reason_field.setFixedHeight(80)
         layout.addWidget(self.reason_field)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
